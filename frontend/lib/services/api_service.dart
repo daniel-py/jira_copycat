@@ -7,7 +7,8 @@ import '../models/user.dart';
 import '../utils/logger.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8080/api';
+  static const String devBaseUrl = 'http://localhost:8080/api';
+  static const String baseUrl = 'backend-winter-dawn-4885.fly.dev/api';
   late final Dio _dio;
   String? _token;
 

@@ -18,80 +18,6 @@ This is a lightweight Jira copycat built with:
 ✅ **Responsive Design**: Works on mobile and desktop  
 ✅ **Free Tier**: 1 board, 10 cards for free users  
 
-## Prerequisites
-
-- Docker and Docker Compose
-- FVM (Flutter Version Manager) - for Flutter development
-- Go 1.21+ (if running backend locally)
-- PostgreSQL (if running database locally)
-
-## Quick Start with Docker
-
-1. **Clone and navigate to the project**:
-   ```bash
-   cd jira_copycat
-   ```
-
-2. **Set up environment variables**:
-   ```bash
-   cp backend/env.example backend/.env
-   # Edit backend/.env with your Paystack keys
-   ```
-
-3. **Start the services**:
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Access the application**:
-   - Backend API: http://localhost:8080
-   - Database: localhost:5432
-
-## Flutter Development Setup
-
-1. **Navigate to frontend directory**:
-   ```bash
-   cd frontend
-   ```
-
-2. **Use FVM to manage Flutter version**:
-   ```bash
-   fvm use 3.32.6
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   fvm flutter pub get
-   ```
-
-4. **Run the Flutter app**:
-   ```bash
-   fvm flutter run
-   ```
-
-## Backend Development Setup
-
-1. **Navigate to backend directory**:
-   ```bash
-   cd backend
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   go mod tidy
-   ```
-
-3. **Set up environment variables**:
-   ```bash
-   cp env.example .env
-   # Edit .env with your configuration
-   ```
-
-4. **Run the backend**:
-   ```bash
-   go run main.go
-   ```
-
 ## Environment Configuration
 
 ### Backend (.env)
@@ -118,7 +44,7 @@ GIN_MODE=debug
 ### Flutter (lib/services/api_service.dart)
 Update the `baseUrl` in `ApiService` to match your backend URL:
 ```dart
-static const String baseUrl = 'http://localhost:8080/api';
+static const String baseUrl = 'https://backend-winter-dawn-4885.fly.dev/api';
 ```
 
 ## API Endpoints

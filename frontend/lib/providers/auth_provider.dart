@@ -14,9 +14,7 @@ final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 class AuthNotifier extends StateNotifier<AuthState> {
   final ApiService _apiService;
 
-  AuthNotifier(this._apiService) : super(AuthState()) {
-    _checkAuthStatus();
-  }
+  AuthNotifier(this._apiService) : super(AuthState());
 
   void clearError() {
     state = state.copyWith(error: null);
@@ -75,30 +73,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> _checkAuthStatus() async {
-    state = state.copyWith(isLoading: true);
-    try {
-      Logger.logInfo('Checking authentication status', context: 'AUTH_PROVIDER');
-      final user = await _apiService.getProfile();
-      state = state.copyWith(
-        user: user,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      );
-      Logger.logInfo('Authentication status check successful for user: ${user.email}', context: 'AUTH_PROVIDER');
-    } catch (e, stackTrace) {
-      Logger.logError('Authentication status check failed', 
-        error: e, 
-        stackTrace: stackTrace, 
-        context: 'AUTH_PROVIDER');
-      state = state.copyWith(
-        isAuthenticated: false,
-        isLoading: false,
-        error: e.toString(),
-      );
-    }
-  }
+  // Removed initial auth status check from startup per requirement to always show Login first.
 }
 
 class AuthState {

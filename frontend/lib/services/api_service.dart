@@ -8,7 +8,7 @@ import '../utils/logger.dart';
 
 class ApiService {
   static const String devBaseUrl = 'http://localhost:8080/api';
-  static const String baseUrl = 'backend-winter-dawn-4885.fly.dev/api';
+  static const String baseUrl = 'https://backend-winter-dawn-4885.fly.dev/api';
   late final Dio _dio;
   String? _token;
 
@@ -267,6 +267,12 @@ class ApiService {
     await _loadToken();
     final response = await _dio.get('/billing/status');
     return response.data;
+  }
+
+  // Auth token helpers
+  Future<bool> hasToken() async {
+    await _loadToken();
+    return _token != null && _token!.isNotEmpty;
   }
 
   Future<PaystackResponse> initializeSubscription(SubscriptionCreate subscriptionCreate) async {

@@ -151,7 +151,7 @@ class BoardListScreen extends ConsumerWidget {
       ),
       body: boardState.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : boardState.error != null
+          : (boardState.boards.isEmpty)
               ? Center(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
@@ -159,64 +159,63 @@ class BoardListScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.error_outline,
+                      Icons.dashboard_outlined,
                           size: 64,
-                          color: Theme.of(context).colorScheme.error,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Error loading boards',
+                          'No boards yet',
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          boardState.error!,
+                      'Create your first board to get started',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                           ),
                           textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            ref.read(boardStateProvider.notifier).clearError();
-                            ref.read(boardStateProvider.notifier).loadBoards();
-                          },
-                          child: const Text('Retry'),
-                        ),
+                    ),
                       ],
                     ),
                   ),
                 )
-              : boardState.boards.isEmpty
-                  ? Center(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.dashboard_outlined,
-                              size: 64,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No boards yet',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Create your first board to get started',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
+          : (boardState.error != null)
+          ? Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                          Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+                    const SizedBox(height: 16),
+                    Text(
+                          'Error loading boards', style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 8),
+                    Text(
+                      boardState.error!,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final notifier = ref.read(boardStateProvider.notifier);
+                        notifier.clearError();
+                        await notifier.loadBoards();
+                        if (ref.read(boardStateProvider).boards.isNotEmpty) {
+                          notifier.clearError();
+                        }
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
                   : GridView.builder(
                       padding: const EdgeInsets.all(16),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

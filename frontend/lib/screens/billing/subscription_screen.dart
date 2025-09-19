@@ -27,7 +27,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       ),
       body: subscriptionState.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : subscriptionState.error != null
+          : (subscriptionState.error != null && subscriptionState.plans.isEmpty)
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -52,10 +52,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: () {
-                          ref.read(subscriptionStateProvider.notifier).clearError();
-                          ref.read(subscriptionStateProvider.notifier).loadPlans();
-                          ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+                    onPressed: () async {
+                      final notifier = ref.read(subscriptionStateProvider.notifier);
+                      notifier.clearError();
+                      await notifier.loadPlans();
+                      await notifier.loadSubscriptionStatus();
+                      if (ref.read(subscriptionStateProvider).plans.isNotEmpty) {
+                        notifier.clearError();
+                      }
                         },
                         child: const Text('Retry'),
                       ),

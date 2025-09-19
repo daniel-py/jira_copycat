@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers/auth_provider.dart';
 import 'auth/login_screen.dart';
-import 'home/home_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -59,18 +57,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _checkAuthStatus() async {
     await Future.delayed(const Duration(seconds: 2));
-    
-    if (mounted) {
-      final authState = ref.read(authStateProvider);
-      if (authState.isAuthenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    }
+
+    if (!mounted) return;
+    // Always go to Login on first launch
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginScreen()));
   }
 }

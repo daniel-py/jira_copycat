@@ -150,6 +150,7 @@ class BoardNotifier extends StateNotifier<BoardState> {
       state = state.copyWith(
         boards: boards,
         isLoading: false,
+        error: null,
       );
       Logger.logInfo('Boards loaded successfully: ${boards.length} boards found', context: 'BOARD_PROVIDER');
     } catch (e, stackTrace) {

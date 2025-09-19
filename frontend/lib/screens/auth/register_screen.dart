@@ -250,8 +250,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (mounted) {
         final authState = ref.read(authStateProvider);
         if (authState.isAuthenticated) {
-          Navigator.of(context).pushReplacement(
+          Navigator.of(
+            context,
+          ).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
           );
         }
       }

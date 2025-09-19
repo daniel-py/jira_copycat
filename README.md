@@ -33,12 +33,6 @@ jira_copycat/
 - **Billing**: Paystack API
 - **Deployment**: Docker
 
-## Getting Started
-
-1. Clone the repository
-2. Set up environment variables
-3. Run `docker-compose up` to start all services
-4. Access the Flutter app on your device/emulator
 
 ## API Endpoints
 

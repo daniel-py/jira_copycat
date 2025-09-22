@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"jira-copycat-backend/internal/config"
 	"jira-copycat-backend/internal/database"
 	"jira-copycat-backend/internal/routes"
+	"jira-copycat-backend/internal/services"
 )
 
 func main() {
@@ -27,7 +29,20 @@ func main() {
 	// Setup routes
 	router := routes.SetupRoutes(db)
 
-	// Start server
+    // Start background renewal worker
+    go func() {
+        ticker := time.NewTicker(1 * time.Hour)
+        defer ticker.Stop()
+        paystack := services.NewPaystackService()
+        for {
+            if err := services.RenewDueSubscriptions(db, paystack); err != nil {
+                log.Println("Renewal worker error:", err)
+            }
+            <-ticker.C
+        }
+    }()
+
+    // Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

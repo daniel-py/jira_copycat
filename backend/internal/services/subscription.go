@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, amount int) (*models.Subscription, error) {
+func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, amount int, authCode string, customerCode string) (*models.Subscription, error) {
 	// Calculate subscription dates
 	startDate := time.Now()
 	var endDate time.Time
@@ -26,7 +26,9 @@ func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, 
 		return nil, fmt.Errorf("invalid plan")
 	}
 
-	subscription := &models.Subscription{
+    nextBilling := endDate
+
+    subscription := &models.Subscription{
 		ID:                uuid.New(),
 		UserID:            userID,
 		PaystackReference: paystackRef,
@@ -34,18 +36,21 @@ func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, 
 		Status:            "active",
 		Amount:            amount,
 		Currency:          "NGN",
+        AuthorizationCode: authCode,
+        CustomerCode:      customerCode,
 		StartDate:         startDate,
-		EndDate:           endDate,
+        EndDate:           endDate,
+        NextBillingDate:   nextBilling,
 		CreatedAt:         time.Now(),
 		UpdatedAt:         time.Now(),
 	}
 
-	_, err := db.Exec(`
-		INSERT INTO subscriptions (id, user_id, paystack_reference, plan, status, amount, currency, start_date, end_date, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    _, err := db.Exec(`
+        INSERT INTO subscriptions (id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		subscription.ID, subscription.UserID, subscription.PaystackReference, subscription.Plan,
-		subscription.Status, subscription.Amount, subscription.Currency, subscription.StartDate,
-		subscription.EndDate, subscription.CreatedAt, subscription.UpdatedAt)
+        subscription.Status, subscription.Amount, subscription.Currency, subscription.AuthorizationCode, subscription.CustomerCode, subscription.StartDate,
+        subscription.EndDate, subscription.NextBillingDate, subscription.CreatedAt, subscription.UpdatedAt)
 
 	if err != nil {
 		return nil, err
@@ -57,13 +62,13 @@ func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, 
 func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, error) {
 	var subscription models.Subscription
 	err := db.QueryRow(`
-		SELECT id, user_id, paystack_reference, plan, status, amount, currency, start_date, end_date, created_at, updated_at
+        SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, created_at, updated_at
 		FROM subscriptions WHERE user_id = $1 AND status = 'active'
 		ORDER BY created_at DESC LIMIT 1`,
 		userID).Scan(
-		&subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
-		&subscription.Status, &subscription.Amount, &subscription.Currency, &subscription.StartDate,
-		&subscription.EndDate, &subscription.CreatedAt, &subscription.UpdatedAt)
+        &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
+        &subscription.Status, &subscription.Amount, &subscription.Currency, &subscription.AuthorizationCode, &subscription.CustomerCode, &subscription.StartDate,
+        &subscription.EndDate, &subscription.NextBillingDate, &subscription.CreatedAt, &subscription.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -117,6 +122,121 @@ func CheckSubscriptionLimits(db *sql.DB, userID uuid.UUID, plan string) (int, in
 	}
 
 	return maxBoards, maxCards, nil
+}
+
+func RecordPayment(db *sql.DB, userID uuid.UUID, subscriptionID *uuid.UUID, reference string, amount int, currency string, status string, channel string, paidAt *time.Time) error {
+    // Check if payment with this reference already exists to prevent duplicates
+    var existingCount int
+    err := db.QueryRow("SELECT COUNT(*) FROM payments WHERE reference = $1", reference).Scan(&existingCount)
+    if err != nil {
+        return err
+    }
+    
+    if existingCount > 0 {
+        // Payment already recorded, skip to prevent duplicate
+        return nil
+    }
+    
+    _, err = db.Exec(`
+        INSERT INTO payments (id, user_id, subscription_id, reference, amount, currency, status, paid_at, channel, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        uuid.New(), userID, subscriptionID, reference, amount, currency, status, paidAt, channel, time.Now())
+    return err
+}
+
+func GetPaymentHistory(db *sql.DB, userID uuid.UUID) ([]models.Payment, error) {
+    rows, err := db.Query(`
+        SELECT id, user_id, subscription_id, reference, amount, currency, status, paid_at, channel, created_at
+        FROM payments WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var payments []models.Payment
+    for rows.Next() {
+        var p models.Payment
+        var subID sql.NullString
+        var paidAt sql.NullTime
+        err := rows.Scan(&p.ID, &p.UserID, &subID, &p.Reference, &p.Amount, &p.Currency, &p.Status, &paidAt, &p.Channel, &p.CreatedAt)
+        if err != nil {
+            return nil, err
+        }
+        if subID.Valid {
+            uid, err := uuid.Parse(subID.String)
+            if err == nil {
+                p.SubscriptionID = &uid
+            }
+        }
+        if paidAt.Valid {
+            t := paidAt.Time
+            p.PaidAt = &t
+        }
+        payments = append(payments, p)
+    }
+    return payments, nil
+}
+
+func RenewDueSubscriptions(db *sql.DB, paystack *PaystackService) error {
+    // Find active subscriptions that are due for renewal and have reusable authorization
+    rows, err := db.Query(`
+        SELECT id, user_id, plan, amount, currency, authorization_code, customer_code
+        FROM subscriptions
+        WHERE status = 'active' AND next_billing_date IS NOT NULL AND next_billing_date <= NOW() AND authorization_code IS NOT NULL AND authorization_code <> ''`)
+    if err != nil {
+        return err
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        var subID uuid.UUID
+        var userID uuid.UUID
+        var plan string
+        var amount int
+        var currency string
+        var authCode string
+        var customerCode string
+        if err := rows.Scan(&subID, &userID, &plan, &amount, &currency, &authCode, &customerCode); err != nil {
+            return err
+        }
+
+        // Get user email
+        user, err := GetUserByID(db, userID)
+        if err != nil {
+            continue
+        }
+
+        // Charge authorization
+        chargeResp, err := paystack.ChargeAuthorization(user.Email, amount, authCode)
+        if err != nil {
+            // mark past_due
+            _ = UpdateSubscriptionStatus(db, "", "past_due")
+            continue
+        }
+
+        if chargeResp.Status {
+            // Extend subscription by one cycle (monthly)
+            startDate := time.Now()
+            endDate := startDate.AddDate(0, 1, 0)
+            nextBilling := endDate
+
+            // Update subscription dates and last reference
+            _, err = db.Exec(`
+                UPDATE subscriptions
+                SET paystack_reference = $1, start_date = $2, end_date = $3, next_billing_date = $4, updated_at = $5
+                WHERE id = $6`,
+                chargeResp.Data.Reference, startDate, endDate, nextBilling, time.Now(), subID)
+            if err != nil {
+                continue
+            }
+
+            // Record payment
+            paidAt := time.Now()
+            _ = RecordPayment(db, userID, &subID, chargeResp.Data.Reference, amount, currency, "success", "card", &paidAt)
+        }
+    }
+
+    return nil
 }
 
 func CanCreateBoard(db *sql.DB, userID uuid.UUID) (bool, error) {

@@ -54,6 +54,8 @@ func RunMigrations(db *sql.DB) error {
 		createColumnsTable,
 		createCardsTable,
 		createSubscriptionsTable,
+        alterSubscriptionsAddBillingFields,
+        createPaymentsTable,
 		createIndexes,
 	}
 
@@ -124,11 +126,35 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     amount INTEGER NOT NULL,
     currency VARCHAR(3) DEFAULT 'NGN',
+    authorization_code VARCHAR(255),
+    customer_code VARCHAR(255),
     start_date TIMESTAMP NOT NULL,
     end_date TIMESTAMP NOT NULL,
+    next_billing_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`
+
+const alterSubscriptionsAddBillingFields = `
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS authorization_code VARCHAR(255);
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS customer_code VARCHAR(255);
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMP;
+`
+
+const createPaymentsTable = `
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
+    reference VARCHAR(255) UNIQUE NOT NULL,
+    amount INTEGER NOT NULL,
+    currency VARCHAR(3) DEFAULT 'NGN',
+    status VARCHAR(50) NOT NULL,
+    paid_at TIMESTAMP,
+    channel VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`
 
 const createIndexes = `
 CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards(user_id);
@@ -136,4 +162,6 @@ CREATE INDEX IF NOT EXISTS idx_columns_board_id ON columns(board_id);
 CREATE INDEX IF NOT EXISTS idx_cards_column_id ON cards(column_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_paystack_ref ON subscriptions(paystack_reference);
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_subscription_id ON payments(subscription_id);
 `

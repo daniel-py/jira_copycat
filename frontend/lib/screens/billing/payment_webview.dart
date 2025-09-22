@@ -142,6 +142,7 @@ class _PaymentWebViewState extends ConsumerState<PaymentWebView> {
       Logger.logInfo('Verifying reference: ${widget.reference}', context: 'WEBVIEW');
       await ref.read(subscriptionStateProvider.notifier).verifySubscription(widget.reference);
       await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+      await ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
       if (mounted) Navigator.of(context).pop(true);
     } catch (e, st) {
       Logger.logError('Verification failed', error: e, stackTrace: st, context: 'WEBVIEW');

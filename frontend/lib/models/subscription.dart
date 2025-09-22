@@ -1,3 +1,35 @@
+class PaystackData {
+  final String reference;
+  final String accessCode;
+  final String authorizationUrl;
+
+  PaystackData({required this.reference, required this.accessCode, required this.authorizationUrl});
+
+  factory PaystackData.fromJson(Map<String, dynamic> json) {
+    return PaystackData(
+      reference: json['reference'],
+      accessCode: json['access_code'],
+      authorizationUrl: json['authorization_url'],
+    );
+  }
+}
+
+class PaystackResponse {
+  final bool status;
+  final String message;
+  final PaystackData data;
+
+  PaystackResponse({required this.status, required this.message, required this.data});
+
+  factory PaystackResponse.fromJson(Map<String, dynamic> json) {
+    return PaystackResponse(
+      status: json['status'],
+      message: json['message'],
+      data: PaystackData.fromJson(json['data']),
+    );
+  }
+}
+
 class Subscription {
   final String id;
   final String userId;
@@ -6,8 +38,11 @@ class Subscription {
   final String status;
   final int amount;
   final String currency;
+  final String? authorizationCode;
+  final String? customerCode;
   final DateTime startDate;
   final DateTime endDate;
+  final DateTime? nextBillingDate;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,8 +54,11 @@ class Subscription {
     required this.status,
     required this.amount,
     required this.currency,
+    this.authorizationCode,
+    this.customerCode,
     required this.startDate,
     required this.endDate,
+    this.nextBillingDate,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -34,8 +72,11 @@ class Subscription {
       status: json['status'],
       amount: json['amount'],
       currency: json['currency'],
+      authorizationCode: json['authorization_code'],
+      customerCode: json['customer_code'],
       startDate: DateTime.parse(json['start_date']),
       endDate: DateTime.parse(json['end_date']),
+      nextBillingDate: json['next_billing_date'] != null ? DateTime.parse(json['next_billing_date']) : null,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -50,11 +91,25 @@ class Subscription {
       'status': status,
       'amount': amount,
       'currency': currency,
+      'authorization_code': authorizationCode,
+      'customer_code': customerCode,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
+      'next_billing_date': nextBillingDate?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+  }
+}
+
+class SubscriptionCreate {
+  final String plan;
+  final int amount;
+
+  SubscriptionCreate({required this.plan, required this.amount});
+
+  Map<String, dynamic> toJson() {
+    return {'plan': plan, 'amount': amount};
   }
 }
 
@@ -89,6 +144,10 @@ class SubscriptionPlan {
     );
   }
 
+  String get formattedPrice {
+    return '₦${(price / 100).toStringAsFixed(0)}';
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -99,66 +158,5 @@ class SubscriptionPlan {
       'max_boards': maxBoards,
       'max_cards': maxCards,
     };
-  }
-
-  String get formattedPrice {
-    return '₦${(price / 100).toStringAsFixed(0)}';
-  }
-}
-
-class SubscriptionCreate {
-  final String plan;
-  final int amount;
-
-  SubscriptionCreate({
-    required this.plan,
-    required this.amount,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'plan': plan,
-      'amount': amount,
-    };
-  }
-}
-
-class PaystackResponse {
-  final bool status;
-  final String message;
-  final PaystackData data;
-
-  PaystackResponse({
-    required this.status,
-    required this.message,
-    required this.data,
-  });
-
-  factory PaystackResponse.fromJson(Map<String, dynamic> json) {
-    return PaystackResponse(
-      status: json['status'],
-      message: json['message'],
-      data: PaystackData.fromJson(json['data']),
-    );
-  }
-}
-
-class PaystackData {
-  final String reference;
-  final String accessCode;
-  final String authorizationUrl;
-
-  PaystackData({
-    required this.reference,
-    required this.accessCode,
-    required this.authorizationUrl,
-  });
-
-  factory PaystackData.fromJson(Map<String, dynamic> json) {
-    return PaystackData(
-      reference: json['reference'],
-      accessCode: json['access_code'],
-      authorizationUrl: json['authorization_url'],
-    );
   }
 }

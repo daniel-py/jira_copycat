@@ -143,3 +143,62 @@ func (p *PaystackService) GetSubscriptionPlans() []models.SubscriptionPlan {
 		},
 	}
 }
+
+type chargeAuthRequest struct {
+    Email             string `json:"email"`
+    Amount            int    `json:"amount"`
+    AuthorizationCode string `json:"authorization_code"`
+}
+
+type chargeAuthResponse struct {
+    Status  bool   `json:"status"`
+    Message string `json:"message"`
+    Data    struct {
+        Reference string `json:"reference"`
+        Status    string `json:"status"`
+        Amount    int    `json:"amount"`
+        Currency  string `json:"currency"`
+    } `json:"data"`
+}
+
+func (p *PaystackService) ChargeAuthorization(email string, amount int, authorizationCode string) (*chargeAuthResponse, error) {
+    url := fmt.Sprintf("%s/transaction/charge_authorization", p.BaseURL)
+
+    payload := chargeAuthRequest{
+        Email:             email,
+        Amount:            amount,
+        AuthorizationCode: authorizationCode,
+    }
+
+    jsonData, err := json.Marshal(payload)
+    if err != nil {
+        return nil, err
+    }
+
+    req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, err
+    }
+
+    req.Header.Set("Authorization", "Bearer "+p.SecretKey)
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{Timeout: 30 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+
+    var res chargeAuthResponse
+    if err := json.Unmarshal(body, &res); err != nil {
+        return nil, err
+    }
+
+    return &res, nil
+}

@@ -81,6 +81,7 @@ func SetupRoutes(db *sql.DB) *gin.Engine {
 			billing.POST("/subscribe", billingHandler.InitializeSubscription)
 			billing.GET("/verify", billingHandler.VerifySubscription)
 			billing.GET("/status", billingHandler.GetSubscriptionStatus)
+			billing.GET("/payments", billingHandler.GetPaymentHistory)
 		}
 	}
 

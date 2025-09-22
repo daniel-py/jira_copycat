@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/board.dart';
+import '../models/payment.dart';
 import '../models/subscription.dart';
 import '../models/user.dart';
 import '../utils/logger.dart';
@@ -216,6 +217,14 @@ class ApiService {
         context: 'API_COLUMN');
       rethrow;
     }
+  }
+
+  Future<List<Payment>> getPaymentHistory() async {
+    await _loadToken();
+    final response = await _dio.get('/billing/payments');
+    final data = response.data['payments'] as List<dynamic>?;
+    if (data == null) return [];
+    return data.map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   // Subscription methods

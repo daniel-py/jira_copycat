@@ -91,6 +91,33 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       const SizedBox(height: 16),
                       
                       ...subscriptionState.plans.map((plan) => _buildPlanCard(context, plan)),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Payment History',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (subscriptionState.payments.isEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text('No payments yet', style: Theme.of(context).textTheme.bodyMedium),
+                      ),
+                    )
+                  else
+                    ...subscriptionState.payments.map(
+                      (p) => Card(
+                        child: ListTile(
+                          leading: Icon(
+                            p.status == 'success' ? Icons.check_circle : Icons.error,
+                            color: p.status == 'success' ? Colors.green : Colors.red,
+                          ),
+                          title: Text('₦${(p.amount / 100).toStringAsFixed(0)} - ${p.status.toUpperCase()}'),
+                          subtitle: Text('${p.reference}\n${p.paidAt != null ? _formatDate(p.paidAt!) : ''}'),
+                          isThreeLine: true,
+                        ),
+                      ),
+                    ),
                     ],
                   ),
                 ),
@@ -103,6 +130,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(subscriptionStateProvider.notifier).loadPlans();
       ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+      ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
       _loadPendingReference();
     });
   }
@@ -230,6 +258,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   try {
                     await ref.read(subscriptionStateProvider.notifier).verifySubscription(_pendingReference!);
                     await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+                    await ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
                     await prefs.remove('pending_paystack_reference');
                     if (mounted) setState(() { _pendingReference = null; });
                     if (mounted) {
@@ -363,6 +392,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         if (result == true && mounted) {
           // Refresh status after successful verification
           await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+                    await ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
           await prefs.remove('pending_paystack_reference');
           setState(() { _pendingReference = null; });
           ScaffoldMessenger.of(context).showSnackBar(

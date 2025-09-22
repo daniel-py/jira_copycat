@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:jira_copycat/providers/auth_provider.dart';
 
+import '../models/payment.dart';
 import '../models/subscription.dart';
 import '../services/api_service.dart';
 import '../utils/logger.dart';
@@ -36,6 +37,24 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
         error: e.toString(),
       );
       rethrow;
+    }
+  }
+
+  Future<void> loadPaymentHistory() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      Logger.logInfo('Loading payment history', context: 'SUBSCRIPTION_PROVIDER');
+      final payments = await _apiService.getPaymentHistory();
+      state = state.copyWith(payments: payments, isLoading: false);
+      Logger.logInfo('Payment history loaded: ${payments.length} items', context: 'SUBSCRIPTION_PROVIDER');
+    } catch (e, stackTrace) {
+      Logger.logError(
+        'Failed to load payment history',
+        error: e,
+        stackTrace: stackTrace,
+        context: 'SUBSCRIPTION_PROVIDER',
+      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
@@ -120,12 +139,14 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
 class SubscriptionState {
   final List<SubscriptionPlan> plans;
   final Subscription? currentSubscription;
+  final List<Payment> payments;
   final bool isLoading;
   final String? error;
 
   SubscriptionState({
     this.plans = const [],
     this.currentSubscription,
+    this.payments = const [],
     this.isLoading = false,
     this.error,
   });
@@ -133,14 +154,18 @@ class SubscriptionState {
   SubscriptionState copyWith({
     List<SubscriptionPlan>? plans,
     Subscription? currentSubscription,
+    List<Payment>? payments,
     bool? isLoading,
     String? error,
   }) {
     return SubscriptionState(
       plans: plans ?? this.plans,
       currentSubscription: currentSubscription ?? this.currentSubscription,
+      payments: payments ?? this.payments,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
     );
   }
 }
+
+ 

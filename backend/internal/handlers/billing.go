@@ -40,6 +40,29 @@ func (h *BillingHandler) InitializeSubscription(c *gin.Context) {
 		return
 	}
 
+	// Check if user already has any subscription (active or pending)
+	existingSubscription, err := services.GetUserAnySubscription(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing subscription"})
+		return
+	}
+	
+	if existingSubscription != nil {
+		var message string
+		if existingSubscription.Status == "active" {
+			message = "You already have an active subscription. Please cancel your current subscription before subscribing to a new plan."
+		} else {
+			message = "You have a pending subscription. Please complete or cancel your current subscription before subscribing to a new plan."
+		}
+		
+		c.JSON(http.StatusConflict, gin.H{
+			"error": message,
+			"current_plan": existingSubscription.Plan,
+			"status": existingSubscription.Status,
+		})
+		return
+	}
+
 	// Get user details
 	user, err := services.GetUserByID(h.db, userID.(uuid.UUID))
 	if err != nil {

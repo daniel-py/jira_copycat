@@ -80,6 +80,27 @@ func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, er
 	return &subscription, nil
 }
 
+func GetUserAnySubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, error) {
+	var subscription models.Subscription
+	err := db.QueryRow(`
+        SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, created_at, updated_at
+		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'pending')
+		ORDER BY created_at DESC LIMIT 1`,
+		userID).Scan(
+        &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
+        &subscription.Status, &subscription.Amount, &subscription.Currency, &subscription.AuthorizationCode, &subscription.CustomerCode, &subscription.StartDate,
+        &subscription.EndDate, &subscription.NextBillingDate, &subscription.CreatedAt, &subscription.UpdatedAt)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No subscription
+		}
+		return nil, err
+	}
+
+	return &subscription, nil
+}
+
 func UpdateSubscriptionStatus(db *sql.DB, paystackRef, status string) error {
 	_, err := db.Exec(`
 		UPDATE subscriptions SET status = $1, updated_at = $2
@@ -158,9 +179,22 @@ func GetPaymentHistory(db *sql.DB, userID uuid.UUID) ([]models.Payment, error) {
         var p models.Payment
         var subID sql.NullString
         var paidAt sql.NullTime
-        err := rows.Scan(&p.ID, &p.UserID, &subID, &p.Reference, &p.Amount, &p.Currency, &p.Status, &paidAt, &p.Channel, &p.CreatedAt)
+        // currency and channel can be NULL in DB, scan into NullString and map safely
+        var currency sql.NullString
+        var channel sql.NullString
+        err := rows.Scan(&p.ID, &p.UserID, &subID, &p.Reference, &p.Amount, &currency, &p.Status, &paidAt, &channel, &p.CreatedAt)
         if err != nil {
             return nil, err
+        }
+        if currency.Valid {
+            p.Currency = currency.String
+        } else {
+            p.Currency = "NGN"
+        }
+        if channel.Valid {
+            p.Channel = channel.String
+        } else {
+            p.Channel = ""
         }
         if subID.Valid {
             uid, err := uuid.Parse(subID.String)

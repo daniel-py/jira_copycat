@@ -90,7 +90,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       ),
                       const SizedBox(height: 16),
                       
-                      ...subscriptionState.plans.map((plan) => _buildPlanCard(context, plan, subscriptionState)),
+                      ...subscriptionState.plans.map((plan) => _buildPlanCard(context, plan)),
                   const SizedBox(height: 24),
                   Text(
                     'Payment History',
@@ -166,8 +166,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildInfoRow('Currency', subscription.currency),
             _buildInfoRow('Start Date', _formatDate(subscription.startDate)),
             _buildInfoRow('End Date', _formatDate(subscription.endDate)),
-            if (subscription.nextBillingDate != null)
-              _buildInfoRow('Next Billing', _formatDate(subscription.nextBillingDate!)),
           ],
         ),
       ),
@@ -284,10 +282,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
   }
 
-  Widget _buildPlanCard(BuildContext context, SubscriptionPlan plan, SubscriptionState subscriptionState) {
-    // Check if user has any subscription (active or pending)
-    final hasSubscription = subscriptionState.currentSubscription != null || _pendingReference != null;
-    
+  Widget _buildPlanCard(BuildContext context, SubscriptionPlan plan) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Card(
@@ -346,24 +341,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: hasSubscription ? null : () => _subscribeToPlan(context, plan),
+                  onPressed: () => _subscribeToPlan(context, plan),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: Text(hasSubscription ? 'Already Subscribed' : 'Subscribe'),
+                  child: const Text('Subscribe'),
                 ),
               ),
-              if (hasSubscription)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'You already have an active or pending subscription',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
             ],
           ),
         ),

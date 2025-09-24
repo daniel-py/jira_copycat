@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"jira-copycat-backend/internal/models"
@@ -208,19 +209,98 @@ func GetPaymentHistory(db *sql.DB, userID uuid.UUID) ([]models.Payment, error) {
         }
         payments = append(payments, p)
     }
-    return payments, nil
+	return payments, nil
+}
+
+func LogRenewalAttempt(db *sql.DB, subscriptionID uuid.UUID, status string, errorMessage string) error {
+	_, err := db.Exec(`
+		INSERT INTO renewal_logs (id, subscription_id, renewal_date, status, error_message, worker_run, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		uuid.New(), subscriptionID, time.Now(), status, errorMessage, false, time.Now())
+	return err
+}
+
+func LogWorkerRun(db *sql.DB, status, message string) error {
+	_, err := db.Exec(`
+		INSERT INTO renewal_logs (id, subscription_id, renewal_date, status, error_message, worker_run, created_at)
+		VALUES ($1, NULL, $2, $3, $4, $5, $6)`,
+		uuid.New(), time.Now(), status, message, true, time.Now())
+	return err
+}
+
+func HasRecentSuccessfulRenewal(db *sql.DB) bool {
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM renewal_logs 
+		WHERE status = 'success' AND worker_run = true AND created_at > NOW() - INTERVAL '12 hours'`).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
+}
+
+func CancelFailedSubscriptions(db *sql.DB) error {
+	// Find subscriptions that haven't been successfully renewed in 3 days
+	rows, err := db.Query(`
+		SELECT s.id, s.user_id, s.plan
+		FROM subscriptions s
+		WHERE s.status = 'active' 
+		AND s.next_billing_date < NOW() - INTERVAL '3 days'
+		AND NOT EXISTS (
+			SELECT 1 FROM renewal_logs rl 
+			WHERE rl.subscription_id = s.id 
+			AND rl.status = 'success' 
+			AND rl.created_at > s.next_billing_date
+		)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var subID, userID uuid.UUID
+		var plan string
+		if err := rows.Scan(&subID, &userID, &plan); err != nil {
+			continue
+		}
+
+		// Cancel the subscription
+		_, err = db.Exec(`
+			UPDATE subscriptions 
+			SET status = 'cancelled', updated_at = $1 
+			WHERE id = $2`,
+			time.Now(), subID)
+		if err != nil {
+			continue
+		}
+
+		// Log the cancellation
+		_ = LogRenewalAttempt(db, subID, "cancelled", "Subscription cancelled due to failed renewals for 3+ days")
+	}
+
+	return nil
 }
 
 func RenewDueSubscriptions(db *sql.DB, paystack *PaystackService) error {
+    // First, cancel subscriptions that have failed for 3+ days
+    if err := CancelFailedSubscriptions(db); err != nil {
+        log.Printf("Error cancelling failed subscriptions: %v", err)
+    }
+
     // Find active subscriptions that are due for renewal and have reusable authorization
     rows, err := db.Query(`
         SELECT id, user_id, plan, amount, currency, authorization_code, customer_code
         FROM subscriptions
         WHERE status = 'active' AND next_billing_date IS NOT NULL AND next_billing_date <= NOW() AND authorization_code IS NOT NULL AND authorization_code <> ''`)
     if err != nil {
+        // Log the worker run as failed
+        _ = LogWorkerRun(db, "failed", "Database query error: "+err.Error())
         return err
     }
     defer rows.Close()
+
+    var renewalCount int
+    var successCount int
 
     for rows.Next() {
         var subID uuid.UUID
@@ -231,20 +311,22 @@ func RenewDueSubscriptions(db *sql.DB, paystack *PaystackService) error {
         var authCode string
         var customerCode string
         if err := rows.Scan(&subID, &userID, &plan, &amount, &currency, &authCode, &customerCode); err != nil {
-            return err
+            continue
         }
+
+        renewalCount++
 
         // Get user email
         user, err := GetUserByID(db, userID)
         if err != nil {
+            _ = LogRenewalAttempt(db, subID, "failed", "User not found: "+err.Error())
             continue
         }
 
         // Charge authorization
         chargeResp, err := paystack.ChargeAuthorization(user.Email, amount, authCode)
         if err != nil {
-            // mark past_due
-            _ = UpdateSubscriptionStatus(db, "", "past_due")
+            _ = LogRenewalAttempt(db, subID, "failed", "Paystack error: "+err.Error())
             continue
         }
 
@@ -261,15 +343,27 @@ func RenewDueSubscriptions(db *sql.DB, paystack *PaystackService) error {
                 WHERE id = $6`,
                 chargeResp.Data.Reference, startDate, endDate, nextBilling, time.Now(), subID)
             if err != nil {
+                _ = LogRenewalAttempt(db, subID, "failed", "Database update error: "+err.Error())
                 continue
             }
 
             // Record payment
             paidAt := time.Now()
             _ = RecordPayment(db, userID, &subID, chargeResp.Data.Reference, amount, currency, "success", "card", &paidAt)
+            
+            // Log successful renewal
+            _ = LogRenewalAttempt(db, subID, "success", "")
+            successCount++
+        } else {
+            _ = LogRenewalAttempt(db, subID, "failed", "Paystack returned failure: "+chargeResp.Message)
         }
     }
 
+    // Always log the worker run as successful if it executed without errors
+    // The worker succeeded even if individual renewals failed (due to card issues, etc.)
+    message := fmt.Sprintf("Processed %d renewals, %d successful", renewalCount, successCount)
+    _ = LogWorkerRun(db, "success", message)
+    log.Printf("Renewal process completed: %d processed, %d successful", renewalCount, successCount)
     return nil
 }
 
@@ -354,3 +448,4 @@ func CanCreateCard(db *sql.DB, userID uuid.UUID) (bool, error) {
 
 	return cardCount < maxCards, nil
 }
+

@@ -29,16 +29,43 @@ func main() {
 	// Setup routes
 	router := routes.SetupRoutes(db)
 
-    // Start background renewal worker
+    // Start daily renewal worker
     go func() {
-        ticker := time.NewTicker(1 * time.Hour)
+        ticker := time.NewTicker(24 * time.Hour)
         defer ticker.Stop()
         paystack := services.NewPaystackService()
+        
+        // Run immediately on startup
+        if err := services.RenewDueSubscriptions(db, paystack); err != nil {
+            log.Println("Initial renewal worker error:", err)
+        }
+        
         for {
-            if err := services.RenewDueSubscriptions(db, paystack); err != nil {
-                log.Println("Renewal worker error:", err)
-            }
             <-ticker.C
+            if err := services.RenewDueSubscriptions(db, paystack); err != nil {
+                log.Println("Daily renewal worker error:", err)
+            }
+        }
+    }()
+
+    // Start backup renewal worker (runs 6 hours after main worker)
+    go func() {
+        // Wait 6 hours before starting backup worker
+        time.Sleep(6 * time.Hour)
+        
+        ticker := time.NewTicker(24 * time.Hour)
+        defer ticker.Stop()
+        paystack := services.NewPaystackService()
+        
+        for {
+            <-ticker.C
+            // Check if main worker ran successfully in the last 12 hours
+            if !services.HasRecentSuccessfulRenewal(db) {
+                log.Println("Backup renewal worker starting - main worker may have failed")
+                if err := services.RenewDueSubscriptions(db, paystack); err != nil {
+                    log.Println("Backup renewal worker error:", err)
+                }
+            }
         }
     }()
 

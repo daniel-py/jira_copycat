@@ -56,6 +56,8 @@ func RunMigrations(db *sql.DB) error {
 		createSubscriptionsTable,
         alterSubscriptionsAddBillingFields,
         createPaymentsTable,
+        createRenewalLogsTable,
+        alterRenewalLogsAddWorkerRun,
 		createIndexes,
 	}
 
@@ -141,6 +143,10 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS customer_code VARCHAR(255);
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMP;
 `
 
+const alterRenewalLogsAddWorkerRun = `
+ALTER TABLE renewal_logs ADD COLUMN IF NOT EXISTS worker_run BOOLEAN DEFAULT FALSE;
+`
+
 const createPaymentsTable = `
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -156,6 +162,18 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 `
 
+const createRenewalLogsTable = `
+CREATE TABLE IF NOT EXISTS renewal_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID REFERENCES subscriptions(id) ON DELETE CASCADE,
+    renewal_date TIMESTAMP NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    error_message TEXT,
+    worker_run BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`
+
 const createIndexes = `
 CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards(user_id);
 CREATE INDEX IF NOT EXISTS idx_columns_board_id ON columns(board_id);
@@ -164,4 +182,7 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_paystack_ref ON subscriptions(paystack_reference);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_subscription_id ON payments(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_renewal_logs_subscription_id ON renewal_logs(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_renewal_logs_renewal_date ON renewal_logs(renewal_date);
+CREATE INDEX IF NOT EXISTS idx_renewal_logs_worker_run ON renewal_logs(worker_run);
 `

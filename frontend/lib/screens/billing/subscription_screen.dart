@@ -136,6 +136,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Widget _buildCurrentSubscriptionCard(BuildContext context, Subscription subscription) {
+    final isActive = subscription.status == 'active';
+    final isCancelled = subscription.status == 'cancelled';
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -145,16 +148,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             Row(
               children: [
                 Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
+                  isActive ? Icons.check_circle : Icons.cancel,
+                  color: isActive ? Colors.green : Colors.red,
                   size: 24,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Active Subscription',
+                  isActive ? 'Active Subscription' : 'Cancelled Subscription',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: isActive ? Colors.green : Colors.red,
                   ),
                 ),
               ],
@@ -166,8 +169,31 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildInfoRow('Currency', subscription.currency),
             _buildInfoRow('Start Date', _formatDate(subscription.startDate)),
             _buildInfoRow('End Date', _formatDate(subscription.endDate)),
-            if (subscription.nextBillingDate != null)
+            if (subscription.nextBillingDate != null && isActive)
               _buildInfoRow('Next Billing', _formatDate(subscription.nextBillingDate!)),
+            if (isCancelled) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.red, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Your subscription was cancelled due to failed payments. Please subscribe to a new plan to continue using premium features.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -285,8 +311,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Widget _buildPlanCard(BuildContext context, SubscriptionPlan plan, SubscriptionState subscriptionState) {
-    // Check if user has any subscription (active or pending)
-    final hasSubscription = subscriptionState.currentSubscription != null || _pendingReference != null;
+    // Check if user has an active subscription or pending payment
+    final hasActiveSubscription =
+        subscriptionState.currentSubscription?.status == 'active' || _pendingReference != null;
+    final hasCancelledSubscription = subscriptionState.currentSubscription?.status == 'cancelled';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -346,14 +374,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: hasSubscription ? null : () => _subscribeToPlan(context, plan),
+                  onPressed: hasActiveSubscription ? null : () => _subscribeToPlan(context, plan),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: Text(hasSubscription ? 'Already Subscribed' : 'Subscribe'),
+                  child: Text(hasActiveSubscription ? 'Already Subscribed' : 'Subscribe'),
                 ),
               ),
-              if (hasSubscription)
+              if (hasActiveSubscription)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -361,6 +389,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              if (hasCancelledSubscription)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Your previous subscription was cancelled. You can subscribe to a new plan.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orange.shade700),
                     textAlign: TextAlign.center,
                   ),
                 ),

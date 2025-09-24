@@ -64,7 +64,7 @@ func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, er
 	var subscription models.Subscription
 	err := db.QueryRow(`
         SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, created_at, updated_at
-		FROM subscriptions WHERE user_id = $1 AND status = 'active'
+		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'cancelled')
 		ORDER BY created_at DESC LIMIT 1`,
 		userID).Scan(
         &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
@@ -73,7 +73,7 @@ func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, er
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // No active subscription
+			return nil, nil // No subscription found
 		}
 		return nil, err
 	}

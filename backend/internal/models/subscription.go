@@ -7,20 +7,23 @@ import (
 )
 
 type Subscription struct {
-	ID                uuid.UUID `json:"id" db:"id"`
-	UserID            uuid.UUID `json:"user_id" db:"user_id"`
-	PaystackReference string    `json:"paystack_reference" db:"paystack_reference"`
-	Plan              string    `json:"plan" db:"plan"` // "basic", "pro", "enterprise"
-	Status            string    `json:"status" db:"status"` // "active", "cancelled", "expired"
-	Amount            int       `json:"amount" db:"amount"` // Amount in kobo (Nigerian currency)
-	Currency          string    `json:"currency" db:"currency"`
-    AuthorizationCode string    `json:"authorization_code" db:"authorization_code"`
-    CustomerCode      string    `json:"customer_code" db:"customer_code"`
-	StartDate         time.Time `json:"start_date" db:"start_date"`
-	EndDate           time.Time `json:"end_date" db:"end_date"`
-    NextBillingDate   time.Time `json:"next_billing_date" db:"next_billing_date"`
-	CreatedAt         time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
+	ID                uuid.UUID  `json:"id" db:"id"`
+	UserID            uuid.UUID  `json:"user_id" db:"user_id"`
+	PaystackReference string     `json:"paystack_reference" db:"paystack_reference"`
+	Plan              string     `json:"plan" db:"plan"` // "basic", "pro", "enterprise"
+	Status            string     `json:"status" db:"status"` // "active", "cancelled", "expired", "pending_2fa"
+	Amount            int        `json:"amount" db:"amount"` // Amount in kobo (Nigerian currency)
+	Currency          string     `json:"currency" db:"currency"`
+    AuthorizationCode string     `json:"authorization_code" db:"authorization_code"`
+    CustomerCode      string     `json:"customer_code" db:"customer_code"`
+	StartDate         time.Time  `json:"start_date" db:"start_date"`
+	EndDate           time.Time  `json:"end_date" db:"end_date"`
+    NextBillingDate   time.Time  `json:"next_billing_date" db:"next_billing_date"`
+    Pending2FAReference string  `json:"pending_2fa_reference" db:"pending_2fa_reference"`
+    Pending2FAURL      string   `json:"pending_2fa_url" db:"pending_2fa_url"`
+    Pending2FACreatedAt *time.Time `json:"pending_2fa_created_at" db:"pending_2fa_created_at"`
+	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 type SubscriptionCreate struct {

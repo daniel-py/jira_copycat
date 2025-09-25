@@ -63,13 +63,13 @@ func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, 
 func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, error) {
 	var subscription models.Subscription
 	err := db.QueryRow(`
-        SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, created_at, updated_at
-		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'cancelled')
+        SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, pending_2fa_reference, pending_2fa_url, pending_2fa_created_at, created_at, updated_at
+		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'cancelled', 'pending_2fa')
 		ORDER BY created_at DESC LIMIT 1`,
 		userID).Scan(
         &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
         &subscription.Status, &subscription.Amount, &subscription.Currency, &subscription.AuthorizationCode, &subscription.CustomerCode, &subscription.StartDate,
-        &subscription.EndDate, &subscription.NextBillingDate, &subscription.CreatedAt, &subscription.UpdatedAt)
+        &subscription.EndDate, &subscription.NextBillingDate, &subscription.Pending2FAReference, &subscription.Pending2FAURL, &subscription.Pending2FACreatedAt, &subscription.CreatedAt, &subscription.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -281,10 +281,51 @@ func CancelFailedSubscriptions(db *sql.DB) error {
 	return nil
 }
 
+func CancelPending2FASubscriptions(db *sql.DB) error {
+	// Find subscriptions that have been pending 2FA for 48+ hours
+	rows, err := db.Query(`
+		SELECT s.id, s.user_id, s.plan
+		FROM subscriptions s
+		WHERE s.status = 'pending_2fa' 
+		AND s.pending_2fa_created_at < NOW() - INTERVAL '48 hours'`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var subID, userID uuid.UUID
+		var plan string
+		if err := rows.Scan(&subID, &userID, &plan); err != nil {
+			continue
+		}
+
+		// Cancel the subscription
+		_, err = db.Exec(`
+			UPDATE subscriptions 
+			SET status = 'cancelled', pending_2fa_reference = NULL, pending_2fa_url = NULL, pending_2fa_created_at = NULL, updated_at = $1 
+			WHERE id = $2`,
+			time.Now(), subID)
+		if err != nil {
+			continue
+		}
+
+		// Log the cancellation
+		_ = LogRenewalAttempt(db, subID, "cancelled", "Subscription cancelled due to 2FA timeout after 48 hours")
+	}
+
+	return nil
+}
+
 func RenewDueSubscriptions(db *sql.DB, paystack *PaystackService) error {
     // First, cancel subscriptions that have failed for 3+ days
     if err := CancelFailedSubscriptions(db); err != nil {
         log.Printf("Error cancelling failed subscriptions: %v", err)
+    }
+    
+    // Also cancel subscriptions that have been pending 2FA for 48+ hours
+    if err := CancelPending2FASubscriptions(db); err != nil {
+        log.Printf("Error cancelling pending 2FA subscriptions: %v", err)
     }
 
     // Find active subscriptions that are due for renewal and have reusable authorization
@@ -331,29 +372,49 @@ func RenewDueSubscriptions(db *sql.DB, paystack *PaystackService) error {
         }
 
         if chargeResp.Status {
-            // Extend subscription by one cycle (monthly)
-            startDate := time.Now()
-            endDate := startDate.AddDate(0, 1, 0)
-            nextBilling := endDate
+            if chargeResp.Data.Paused {
+                // 2FA required - set subscription to pending_2fa status
+                _, err = db.Exec(`
+                    UPDATE subscriptions
+                    SET status = 'pending_2fa', pending_2fa_reference = $1, pending_2fa_url = $2, pending_2fa_created_at = $3, updated_at = $4
+                    WHERE id = $5`,
+                    chargeResp.Data.Reference, chargeResp.Data.AuthorizationURL, time.Now(), time.Now(), subID)
+                if err != nil {
+                    _ = LogRenewalAttempt(db, subID, "failed", "Database update error for 2FA: "+err.Error())
+                    continue
+                }
 
-            // Update subscription dates and last reference
-            _, err = db.Exec(`
-                UPDATE subscriptions
-                SET paystack_reference = $1, start_date = $2, end_date = $3, next_billing_date = $4, updated_at = $5
-                WHERE id = $6`,
-                chargeResp.Data.Reference, startDate, endDate, nextBilling, time.Now(), subID)
-            if err != nil {
-                _ = LogRenewalAttempt(db, subID, "failed", "Database update error: "+err.Error())
-                continue
+                // Log 2FA required
+                _ = LogRenewalAttempt(db, subID, "pending_2fa", "2FA required for renewal: "+chargeResp.Data.AuthorizationURL)
+                
+                // TODO: Send email notification to user about 2FA requirement
+                log.Printf("2FA required for subscription %s, user: %s", subID, user.Email)
+            } else {
+                // Successful charge - extend subscription by one cycle (monthly)
+                startDate := time.Now()
+                endDate := startDate.AddDate(0, 1, 0)
+                nextBilling := endDate
+
+                // Update subscription dates and clear any pending 2FA
+                _, err = db.Exec(`
+                    UPDATE subscriptions
+                    SET paystack_reference = $1, start_date = $2, end_date = $3, next_billing_date = $4, 
+                        status = 'active', pending_2fa_reference = NULL, pending_2fa_url = NULL, pending_2fa_created_at = NULL, updated_at = $5
+                    WHERE id = $6`,
+                    chargeResp.Data.Reference, startDate, endDate, nextBilling, time.Now(), subID)
+                if err != nil {
+                    _ = LogRenewalAttempt(db, subID, "failed", "Database update error: "+err.Error())
+                    continue
+                }
+
+                // Record payment
+                paidAt := time.Now()
+                _ = RecordPayment(db, userID, &subID, chargeResp.Data.Reference, amount, currency, "success", "card", &paidAt)
+                
+                // Log successful renewal
+                _ = LogRenewalAttempt(db, subID, "success", "")
+                successCount++
             }
-
-            // Record payment
-            paidAt := time.Now()
-            _ = RecordPayment(db, userID, &subID, chargeResp.Data.Reference, amount, currency, "success", "card", &paidAt)
-            
-            // Log successful renewal
-            _ = LogRenewalAttempt(db, subID, "success", "")
-            successCount++
         } else {
             _ = LogRenewalAttempt(db, subID, "failed", "Paystack returned failure: "+chargeResp.Message)
         }

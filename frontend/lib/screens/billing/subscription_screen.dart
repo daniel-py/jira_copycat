@@ -131,6 +131,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       ref.read(subscriptionStateProvider.notifier).loadPlans();
       ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
       ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
+      ref.read(subscriptionStateProvider.notifier).load2FAStatus();
       _loadPendingReference();
     });
   }
@@ -138,6 +139,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   Widget _buildCurrentSubscriptionCard(BuildContext context, Subscription subscription) {
     final isActive = subscription.status == 'active';
     final isCancelled = subscription.status == 'cancelled';
+    final isPending2FA = subscription.status == 'pending_2fa';
     
     return Card(
       child: Padding(
@@ -148,16 +150,32 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             Row(
               children: [
                 Icon(
-                  isActive ? Icons.check_circle : Icons.cancel,
-                  color: isActive ? Colors.green : Colors.red,
+                  isActive
+                      ? Icons.check_circle
+                      : isPending2FA
+                      ? Icons.pending_actions
+                      : Icons.cancel,
+                  color: isActive
+                      ? Colors.green
+                      : isPending2FA
+                      ? Colors.orange
+                      : Colors.red,
                   size: 24,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  isActive ? 'Active Subscription' : 'Cancelled Subscription',
+                  isActive
+                      ? 'Active Subscription'
+                      : isPending2FA
+                      ? 'Pending 2FA'
+                      : 'Cancelled Subscription',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: isActive ? Colors.green : Colors.red,
+                    color: isActive
+                        ? Colors.green
+                        : isPending2FA
+                        ? Colors.orange
+                        : Colors.red,
                   ),
                 ),
               ],
@@ -171,6 +189,43 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildInfoRow('End Date', _formatDate(subscription.endDate)),
             if (subscription.nextBillingDate != null && isActive)
               _buildInfoRow('Next Billing', _formatDate(subscription.nextBillingDate!)),
+            if (isPending2FA) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.security, color: Colors.orange, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Your bank requires 2FA to complete the renewal. Please complete the authentication to continue your subscription.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orange.shade700),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _open2FAWebView(context, subscription.pending2FAURL!),
+                        icon: const Icon(Icons.security),
+                        label: const Text('Complete 2FA'),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (isCancelled) ...[
               const SizedBox(height: 12),
               Container(
@@ -315,6 +370,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final hasActiveSubscription =
         subscriptionState.currentSubscription?.status == 'active' || _pendingReference != null;
     final hasCancelledSubscription = subscriptionState.currentSubscription?.status == 'cancelled';
+    final hasPending2FA = subscriptionState.currentSubscription?.status == 'pending_2fa';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -374,11 +430,17 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: hasActiveSubscription ? null : () => _subscribeToPlan(context, plan),
+                  onPressed: (hasActiveSubscription || hasPending2FA) ? null : () => _subscribeToPlan(context, plan),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: Text(hasActiveSubscription ? 'Already Subscribed' : 'Subscribe'),
+                  child: Text(
+                    hasActiveSubscription
+                        ? 'Already Subscribed'
+                        : hasPending2FA
+                        ? 'Complete 2FA First'
+                        : 'Subscribe',
+                  ),
                 ),
               ),
               if (hasActiveSubscription)
@@ -389,6 +451,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              if (hasPending2FA)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Please complete 2FA authentication to renew your subscription first.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orange.shade700),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -416,6 +487,37 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final prefs = await SharedPreferences.getInstance();
     final refStr = prefs.getString('pending_paystack_reference');
     if (mounted) setState(() { _pendingReference = refStr; });
+  }
+
+  Future<void> _open2FAWebView(BuildContext context, String authorizationURL) async {
+    try {
+      // Open 2FA WebView similar to payment WebView
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PaymentWebView(
+            authorizationUrl: authorizationURL,
+            reference: '2fa_renewal', // We can use a generic reference for 2FA
+          ),
+        ),
+      );
+
+      if (result == true && mounted) {
+        // Refresh subscription status after successful 2FA
+        await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('2FA completed successfully. Your subscription has been renewed.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('2FA failed: $e'), backgroundColor: Colors.red));
+      }
+    }
   }
 
   Future<void> _subscribeToPlan(BuildContext context, SubscriptionPlan plan) async {

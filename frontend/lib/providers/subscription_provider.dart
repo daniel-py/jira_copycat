@@ -40,6 +40,19 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
     }
   }
 
+  Future<void> load2FAStatus() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      Logger.logInfo('Loading 2FA status', context: 'SUBSCRIPTION_PROVIDER');
+      final twoFAStatus = await _apiService.get2FAStatus();
+      state = state.copyWith(twoFAStatus: twoFAStatus, isLoading: false);
+      Logger.logInfo('2FA status loaded: requires_2fa=${twoFAStatus.requires2FA}', context: 'SUBSCRIPTION_PROVIDER');
+    } catch (e, stackTrace) {
+      Logger.logError('Failed to load 2FA status', error: e, stackTrace: stackTrace, context: 'SUBSCRIPTION_PROVIDER');
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
   Future<void> loadPaymentHistory() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -140,6 +153,7 @@ class SubscriptionState {
   final List<SubscriptionPlan> plans;
   final Subscription? currentSubscription;
   final List<Payment> payments;
+  final TwoFAStatus? twoFAStatus;
   final bool isLoading;
   final String? error;
 
@@ -147,6 +161,7 @@ class SubscriptionState {
     this.plans = const [],
     this.currentSubscription,
     this.payments = const [],
+    this.twoFAStatus,
     this.isLoading = false,
     this.error,
   });
@@ -155,6 +170,7 @@ class SubscriptionState {
     List<SubscriptionPlan>? plans,
     Subscription? currentSubscription,
     List<Payment>? payments,
+    TwoFAStatus? twoFAStatus,
     bool? isLoading,
     String? error,
   }) {
@@ -162,6 +178,7 @@ class SubscriptionState {
       plans: plans ?? this.plans,
       currentSubscription: currentSubscription ?? this.currentSubscription,
       payments: payments ?? this.payments,
+      twoFAStatus: twoFAStatus ?? this.twoFAStatus,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
     );

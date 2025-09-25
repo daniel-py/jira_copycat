@@ -58,6 +58,7 @@ func RunMigrations(db *sql.DB) error {
         createPaymentsTable,
         createRenewalLogsTable,
         alterRenewalLogsAddWorkerRun,
+        alterSubscriptionsAdd2FAFields,
 		createIndexes,
 	}
 
@@ -145,6 +146,12 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMP;
 
 const alterRenewalLogsAddWorkerRun = `
 ALTER TABLE renewal_logs ADD COLUMN IF NOT EXISTS worker_run BOOLEAN DEFAULT FALSE;
+`
+
+const alterSubscriptionsAdd2FAFields = `
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS pending_2fa_reference VARCHAR(255);
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS pending_2fa_url TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS pending_2fa_created_at TIMESTAMP;
 `
 
 const createPaymentsTable = `

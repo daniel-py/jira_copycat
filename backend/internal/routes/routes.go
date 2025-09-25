@@ -82,6 +82,8 @@ func SetupRoutes(db *sql.DB) *gin.Engine {
 			billing.GET("/verify", billingHandler.VerifySubscription)
 			billing.GET("/status", billingHandler.GetSubscriptionStatus)
 			billing.GET("/payments", billingHandler.GetPaymentHistory)
+			billing.GET("/2fa-status", billingHandler.Get2FAStatus)
+			billing.GET("/2fa-url", billingHandler.Get2FAURL)
 		}
 	}
 

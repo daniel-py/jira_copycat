@@ -123,6 +123,19 @@ class ApiService {
     await _dio.delete('/columns/$columnId');
   }
 
+  // 2FA methods
+  Future<TwoFAStatus> get2FAStatus() async {
+    await _loadToken();
+    final response = await _dio.get('/billing/2fa-status');
+    return TwoFAStatus.fromJson(response.data);
+  }
+
+  Future<Map<String, dynamic>> get2FAURL() async {
+    await _loadToken();
+    final response = await _dio.get('/billing/2fa-url');
+    return response.data;
+  }
+
   Future<Board> getBoard(String boardId) async {
     try {
       await _loadToken();

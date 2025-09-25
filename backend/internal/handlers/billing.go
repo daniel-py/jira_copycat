@@ -252,3 +252,57 @@ func (h *BillingHandler) GetPaymentHistory(c *gin.Context) {
 
     c.JSON(http.StatusOK, gin.H{"payments": payments})
 }
+
+func (h *BillingHandler) Get2FAStatus(c *gin.Context) {
+    userID, exists := c.Get("user_id")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+        return
+    }
+
+    subscription, err := services.GetUserSubscription(h.db, userID.(uuid.UUID))
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    if subscription == nil || subscription.Status != "pending_2fa" {
+        c.JSON(http.StatusOK, gin.H{
+            "requires_2fa": false,
+            "message": "No 2FA required",
+        })
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "requires_2fa": true,
+        "authorization_url": subscription.Pending2FAURL,
+        "reference": subscription.Pending2FAReference,
+        "created_at": subscription.Pending2FACreatedAt,
+        "message": "Please complete 2FA to renew your subscription",
+    })
+}
+
+func (h *BillingHandler) Get2FAURL(c *gin.Context) {
+    userID, exists := c.Get("user_id")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+        return
+    }
+
+    subscription, err := services.GetUserSubscription(h.db, userID.(uuid.UUID))
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    if subscription == nil || subscription.Status != "pending_2fa" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "No pending 2FA found"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "authorization_url": subscription.Pending2FAURL,
+        "reference": subscription.Pending2FAReference,
+    })
+}

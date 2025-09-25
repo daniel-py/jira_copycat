@@ -43,6 +43,9 @@ class Subscription {
   final DateTime startDate;
   final DateTime endDate;
   final DateTime? nextBillingDate;
+  final String? pending2FAReference;
+  final String? pending2FAURL;
+  final DateTime? pending2FACreatedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -59,6 +62,9 @@ class Subscription {
     required this.startDate,
     required this.endDate,
     this.nextBillingDate,
+    this.pending2FAReference,
+    this.pending2FAURL,
+    this.pending2FACreatedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -77,6 +83,11 @@ class Subscription {
       startDate: DateTime.parse(json['start_date']),
       endDate: DateTime.parse(json['end_date']),
       nextBillingDate: json['next_billing_date'] != null ? DateTime.parse(json['next_billing_date']) : null,
+      pending2FAReference: json['pending_2fa_reference'],
+      pending2FAURL: json['pending_2fa_url'],
+      pending2FACreatedAt: json['pending_2fa_created_at'] != null
+          ? DateTime.parse(json['pending_2fa_created_at'])
+          : null,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -96,6 +107,9 @@ class Subscription {
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
       'next_billing_date': nextBillingDate?.toIso8601String(),
+      'pending_2fa_reference': pending2FAReference,
+      'pending_2fa_url': pending2FAURL,
+      'pending_2fa_created_at': pending2FACreatedAt?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -158,5 +172,31 @@ class SubscriptionPlan {
       'max_boards': maxBoards,
       'max_cards': maxCards,
     };
+  }
+}
+
+class TwoFAStatus {
+  final bool requires2FA;
+  final String? authorizationURL;
+  final String? reference;
+  final DateTime? createdAt;
+  final String message;
+
+  TwoFAStatus({
+    required this.requires2FA,
+    this.authorizationURL,
+    this.reference,
+    this.createdAt,
+    required this.message,
+  });
+
+  factory TwoFAStatus.fromJson(Map<String, dynamic> json) {
+    return TwoFAStatus(
+      requires2FA: json['requires_2fa'] ?? false,
+      authorizationURL: json['authorization_url'],
+      reference: json['reference'],
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+      message: json['message'] ?? '',
+    );
   }
 }

@@ -154,10 +154,12 @@ type chargeAuthResponse struct {
     Status  bool   `json:"status"`
     Message string `json:"message"`
     Data    struct {
-        Reference string `json:"reference"`
-        Status    string `json:"status"`
-        Amount    int    `json:"amount"`
-        Currency  string `json:"currency"`
+        Reference        string `json:"reference"`
+        Status           string `json:"status"`
+        Amount           int    `json:"amount"`
+        Currency         string `json:"currency"`
+        Paused           bool   `json:"paused"`
+        AuthorizationURL string `json:"authorization_url"`
     } `json:"data"`
 }
 

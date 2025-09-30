@@ -160,9 +160,9 @@ func RecordPayment(db *sql.DB, userID uuid.UUID, subscriptionID *uuid.UUID, refe
     }
     
     _, err = db.Exec(`
-        INSERT INTO payments (id, user_id, subscription_id, reference, amount, currency, status, paid_at, channel, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        uuid.New(), userID, subscriptionID, reference, amount, currency, status, paidAt, channel, time.Now())
+        INSERT INTO payments (user_id, subscription_id, reference, amount, currency, status, paid_at, channel)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        userID, subscriptionID, reference, amount, currency, status, paidAt, channel)
     return err
 }
 

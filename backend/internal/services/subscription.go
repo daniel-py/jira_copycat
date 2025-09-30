@@ -135,10 +135,8 @@ func CheckSubscriptionLimits(db *sql.DB, userID uuid.UUID, plan string) (int, in
 	// Get plan limits
 	var maxBoards, maxCards int
 	switch plan {
-	case "basic":
-		maxBoards, maxCards = 3, 50
-	case "pro", "enterprise":
-		maxBoards, maxCards = -1, -1 // Unlimited
+	case "basic", "pro", "enterprise":
+		maxBoards, maxCards = 5, 50 // All paid plans get 5 boards
 	default:
 		return 0, 0, fmt.Errorf("invalid plan")
 	}
@@ -508,5 +506,30 @@ func CanCreateCard(db *sql.DB, userID uuid.UUID) (bool, error) {
 	}
 
 	return cardCount < maxCards, nil
+}
+
+// CanAccessBoards checks if user can access their boards based on subscription status
+func CanAccessBoards(db *sql.DB, userID uuid.UUID) (bool, error) {
+	subscription, err := GetUserSubscription(db, userID)
+	if err != nil {
+		return false, err
+	}
+
+	if subscription == nil {
+		// No subscription - free tier, can access 1 board
+		return true, nil
+	}
+
+	// Check if subscription is active
+	if subscription.Status != "active" {
+		return false, nil // Subscription expired or cancelled - no access
+	}
+
+	// Check if subscription has expired
+	if time.Now().After(subscription.EndDate) {
+		return false, nil // Subscription expired - no access
+	}
+
+	return true, nil // Active subscription - full access
 }
 

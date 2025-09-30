@@ -60,6 +60,21 @@ func (h *BoardHandler) GetBoards(c *gin.Context) {
 		return
 	}
 
+	// Check if user can access boards
+	canAccess, err := services.CanAccessBoards(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check access permissions"})
+		return
+	}
+
+	if !canAccess {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Your subscription has expired. Please renew to access your boards.",
+			"subscription_expired": true,
+		})
+		return
+	}
+
 	boards, err := services.GetUserBoards(h.db, userID.(uuid.UUID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -73,6 +88,21 @@ func (h *BoardHandler) GetBoard(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Check if user can access boards
+	canAccess, err := services.CanAccessBoards(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check access permissions"})
+		return
+	}
+
+	if !canAccess {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Your subscription has expired. Please renew to access your boards.",
+			"subscription_expired": true,
+		})
 		return
 	}
 

@@ -159,11 +159,14 @@ class BoardNotifier extends StateNotifier<BoardState> {
         stackTrace: stackTrace, 
         context: 'BOARD_PROVIDER');
       
-      // Check if it's an authentication error
+      // Check for specific error types
       String errorMessage = e.toString();
       if (e.toString().contains('401')) {
         errorMessage = 'Authentication required. Please log in again.';
         Logger.logWarning('Authentication error detected in loadBoards', context: 'BOARD_PROVIDER');
+      } else if (e.toString().contains('subscription has expired') || e.toString().contains('subscription_expired')) {
+        errorMessage = 'Your subscription has expired. Please renew to access your boards.';
+        Logger.logWarning('Subscription expired error detected in loadBoards', context: 'BOARD_PROVIDER');
       }
       
       state = state.copyWith(
@@ -341,7 +344,7 @@ class BoardState {
       columns: columns ?? this.columns,
       cardsByColumn: cardsByColumn ?? this.cardsByColumn,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error, // This will properly set error to null when passed
     );
   }
 }

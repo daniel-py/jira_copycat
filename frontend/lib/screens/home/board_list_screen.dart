@@ -136,7 +136,26 @@ class BoardListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Boards'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('My Boards'),
+            if (subscriptionState.currentSubscription != null)
+              Text(
+                '${boardState.boards.length}/5 boards',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+              )
+            else
+              Text(
+                '${boardState.boards.length}/1 boards',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+              ),
+          ],
+        ),
         actions: [
           if (subscriptionState.currentSubscription == null)
             IconButton(
@@ -151,35 +170,6 @@ class BoardListScreen extends ConsumerWidget {
       ),
       body: boardState.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : (boardState.boards.isEmpty)
-              ? Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                      Icons.dashboard_outlined,
-                          size: 64,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No boards yet',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                      'Create your first board to get started',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                          ),
-                          textAlign: TextAlign.center,
-                    ),
-                      ],
-                    ),
-                  ),
-                )
           : (boardState.error != null)
           ? Center(
               child: SingleChildScrollView(
@@ -188,10 +178,21 @@ class BoardListScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                          Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+                      boardState.error!.contains('subscription has expired')
+                          ? Icons.payment_outlined
+                          : Icons.error_outline,
+                      size: 64,
+                      color: boardState.error!.contains('subscription has expired')
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.error,
+                    ),
                     const SizedBox(height: 16),
                     Text(
-                          'Error loading boards', style: Theme.of(context).textTheme.headlineSmall),
+                      boardState.error!.contains('subscription has expired')
+                          ? 'Subscription Expired'
+                          : 'Error loading boards',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       boardState.error!,
@@ -201,17 +202,41 @@ class BoardListScreen extends ConsumerWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final notifier = ref.read(boardStateProvider.notifier);
-                        notifier.clearError();
-                        await notifier.loadBoards();
-                        if (ref.read(boardStateProvider).boards.isNotEmpty) {
+                    if (boardState.error!.contains('subscription has expired')) ...[
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          // Navigate to subscription screen
+                          DefaultTabController.of(context).animateTo(1);
+                        },
+                        icon: const Icon(Icons.upgrade),
+                        label: const Text('Renew Subscription'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () async {
+                          final notifier = ref.read(boardStateProvider.notifier);
                           notifier.clearError();
-                        }
-                      },
-                      child: const Text('Retry'),
-                    ),
+                          await notifier.loadBoards();
+                        },
+                        child: const Text('Try Again'),
+                      ),
+                    ] else ...[
+                      ElevatedButton(
+                        onPressed: () async {
+                          final notifier = ref.read(boardStateProvider.notifier);
+                          notifier.clearError();
+                          await notifier.loadBoards();
+                          if (ref.read(boardStateProvider).boards.isNotEmpty) {
+                            notifier.clearError();
+                          }
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ],
                 ),
               ),

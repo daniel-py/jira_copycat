@@ -106,11 +106,11 @@ func (p *PaystackService) GetSubscriptionPlans() []models.SubscriptionPlan {
 			Price:       500000, // 5000 NGN in kobo
 			Currency:    "NGN",
 			Features: []string{
-				"Up to 3 boards",
+				"Up to 5 boards",
 				"Up to 50 cards per board",
 				"Basic support",
 			},
-			MaxBoards: 3,
+			MaxBoards: 5,
 			MaxCards:  50,
 		},
 		{
@@ -119,13 +119,13 @@ func (p *PaystackService) GetSubscriptionPlans() []models.SubscriptionPlan {
 			Price:       1500000, // 15000 NGN in kobo
 			Currency:    "NGN",
 			Features: []string{
-				"Unlimited boards",
-				"Unlimited cards",
+				"Up to 5 boards",
+				"Up to 50 cards per board",
 				"Priority support",
 				"Advanced analytics",
 			},
-			MaxBoards: -1, // Unlimited
-			MaxCards:  -1, // Unlimited
+			MaxBoards: 5,
+			MaxCards:  50,
 		},
 		{
 			Name:        "Enterprise",
@@ -133,13 +133,14 @@ func (p *PaystackService) GetSubscriptionPlans() []models.SubscriptionPlan {
 			Price:       5000000, // 50000 NGN in kobo
 			Currency:    "NGN",
 			Features: []string{
-				"Everything in Pro",
+				"Up to 5 boards",
+				"Up to 50 cards per board",
 				"Custom integrations",
 				"Dedicated support",
 				"Advanced security",
 			},
-			MaxBoards: -1, // Unlimited
-			MaxCards:  -1, // Unlimited
+			MaxBoards: 5,
+			MaxCards:  50,
 		},
 	}
 }

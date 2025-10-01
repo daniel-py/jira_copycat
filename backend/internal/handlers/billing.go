@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -238,19 +239,68 @@ func (h *BillingHandler) Webhook(c *gin.Context) {
 }
 
 func (h *BillingHandler) GetPaymentHistory(c *gin.Context) {
-    userID, exists := c.Get("user_id")
-    if !exists {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-        return
-    }
+	defer func() {
+		if r := recover(); r != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Panic occurred: " + fmt.Sprintf("%v", r),
+				"type": "panic",
+			})
+		}
+	}()
 
-    payments, err := services.GetPaymentHistory(h.db, userID.(uuid.UUID))
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
-    c.JSON(http.StatusOK, gin.H{"payments": payments})
+	payments, err := services.GetPaymentHistory(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "GetPaymentHistory failed: " + err.Error(),
+			"user_id": userID,
+			"type": "getPaymentHistory_error",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"payments": payments})
+}
+
+// Debug endpoint to test payment history
+func (h *BillingHandler) DebugPaymentHistory(c *gin.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Panic occurred: " + fmt.Sprintf("%v", r),
+				"type": "panic",
+			})
+		}
+	}()
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Test payment history retrieval
+	payments, err := services.GetPaymentHistory(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "GetPaymentHistory failed: " + err.Error(),
+			"user_id": userID,
+			"type": "getPaymentHistory_error",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"payments_count": len(payments),
+		"user_id": userID,
+		"status": "success",
+		"payments": payments,
+	})
 }
 
 func (h *BillingHandler) Get2FAStatus(c *gin.Context) {

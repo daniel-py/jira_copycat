@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/board.dart' as models;
+import '../../providers/auth_provider.dart';
 import '../../providers/board_provider.dart';
 import '../../providers/subscription_provider.dart';
 import 'board_detail_screen.dart';
@@ -157,6 +158,35 @@ class BoardListScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          // Temporary debug buttons
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () async {
+              try {
+                final result = await ref.read(apiServiceProvider).debugSubscription();
+                print('DEBUG RESULT: $result');
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Debug: $result')));
+              } catch (e) {
+                print('DEBUG ERROR: $e');
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Debug Error: $e')));
+              }
+            },
+            tooltip: 'Debug Subscription',
+          ),
+          IconButton(
+            icon: const Icon(Icons.payment),
+            onPressed: () async {
+              try {
+                final result = await ref.read(apiServiceProvider).debugPaymentHistory();
+                print('PAYMENT DEBUG RESULT: $result');
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment Debug: $result')));
+              } catch (e) {
+                print('PAYMENT DEBUG ERROR: $e');
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment Debug Error: $e')));
+              }
+            },
+            tooltip: 'Debug Payment History',
+          ),
           if (subscriptionState.currentSubscription == null)
             IconButton(
               icon: const Icon(Icons.upgrade),

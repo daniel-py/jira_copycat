@@ -19,8 +19,8 @@ type Subscription struct {
 	StartDate         time.Time  `json:"start_date" db:"start_date"`
 	EndDate           time.Time  `json:"end_date" db:"end_date"`
     NextBillingDate   time.Time  `json:"next_billing_date" db:"next_billing_date"`
-    Pending2FAReference string  `json:"pending_2fa_reference" db:"pending_2fa_reference"`
-    Pending2FAURL      string   `json:"pending_2fa_url" db:"pending_2fa_url"`
+    Pending2FAReference *string  `json:"pending_2fa_reference" db:"pending_2fa_reference"`
+    Pending2FAURL      *string   `json:"pending_2fa_url" db:"pending_2fa_url"`
     Pending2FACreatedAt *time.Time `json:"pending_2fa_created_at" db:"pending_2fa_created_at"`
 	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`

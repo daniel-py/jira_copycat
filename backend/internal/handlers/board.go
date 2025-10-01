@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"jira-copycat-backend/internal/models"
@@ -82,6 +83,54 @@ func (h *BoardHandler) GetBoards(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"boards": boards})
+}
+
+// Debug endpoint to test subscription access
+func (h *BoardHandler) DebugSubscription(c *gin.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Panic occurred: " + fmt.Sprintf("%v", r),
+				"type": "panic",
+			})
+		}
+	}()
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Test subscription check
+	canAccess, err := services.CanAccessBoards(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "CanAccessBoards failed: " + err.Error(),
+			"user_id": userID,
+			"type": "canAccessBoards_error",
+		})
+		return
+	}
+
+	// Test board retrieval
+	boards, err := services.GetUserBoards(h.db, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "GetUserBoards failed: " + err.Error(),
+			"can_access": canAccess,
+			"user_id": userID,
+			"type": "getUserBoards_error",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"can_access": canAccess,
+		"boards_count": len(boards),
+		"user_id": userID,
+		"status": "success",
+	})
 }
 
 func (h *BoardHandler) GetBoard(c *gin.Context) {

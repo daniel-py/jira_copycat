@@ -98,6 +98,48 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> debugPaymentHistory() async {
+    try {
+      await _loadToken();
+      Logger.logInfo('Testing payment history debug endpoint', context: 'API_DEBUG');
+      final response = await _dio.get('/billing/debug/payments');
+      Logger.logInfo('Payment debug response: ${response.data}', context: 'API_DEBUG');
+      return response.data;
+    } catch (e, stackTrace) {
+      Logger.logError('Payment debug endpoint failed', error: e, stackTrace: stackTrace, context: 'API_DEBUG');
+
+      // Try to extract error details from DioException
+      if (e is DioException && e.response != null) {
+        final errorData = e.response!.data;
+        Logger.logError('Payment error response data: $errorData', context: 'API_DEBUG');
+        throw Exception('Server error: $errorData');
+      }
+
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> debugSubscription() async {
+    try {
+      await _loadToken();
+      Logger.logInfo('Testing subscription debug endpoint', context: 'API_DEBUG');
+      final response = await _dio.get('/boards/debug/subscription');
+      Logger.logInfo('Debug response: ${response.data}', context: 'API_DEBUG');
+      return response.data;
+    } catch (e, stackTrace) {
+      Logger.logError('Debug endpoint failed', error: e, stackTrace: stackTrace, context: 'API_DEBUG');
+
+      // Try to extract error details from DioException
+      if (e is DioException && e.response != null) {
+        final errorData = e.response!.data;
+        Logger.logError('Error response data: $errorData', context: 'API_DEBUG');
+        throw Exception('Server error: $errorData');
+      }
+
+      rethrow;
+    }
+  }
+
   Future<void> deleteBoard(String boardId) async {
     try {
       await _loadToken();
@@ -233,11 +275,30 @@ class ApiService {
   }
 
   Future<List<Payment>> getPaymentHistory() async {
-    await _loadToken();
-    final response = await _dio.get('/billing/payments');
-    final data = response.data['payments'] as List<dynamic>?;
-    if (data == null) return [];
-    return data.map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      await _loadToken();
+      Logger.logInfo('Fetching payment history', context: 'API_BILLING');
+      final response = await _dio.get('/billing/payments');
+      final data = response.data['payments'] as List<dynamic>?;
+      if (data == null) {
+        Logger.logWarning('No payments data in response, returning empty list', context: 'API_BILLING');
+        return [];
+      }
+      final payments = data.map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList();
+      Logger.logInfo('Payment history fetched successfully: ${payments.length} payments', context: 'API_BILLING');
+      return payments;
+    } catch (e, stackTrace) {
+      Logger.logError('Failed to fetch payment history', error: e, stackTrace: stackTrace, context: 'API_BILLING');
+
+      // Try to extract error details from DioException
+      if (e is DioException && e.response != null) {
+        final errorData = e.response!.data;
+        Logger.logError('Payment history error response data: $errorData', context: 'API_BILLING');
+        throw Exception('Server error: $errorData');
+      }
+
+      rethrow;
+    }
   }
 
   // Subscription methods

@@ -60,6 +60,7 @@ func SetupRoutes(db *sql.DB) *gin.Engine {
 			boards.GET("/:id", boardHandler.GetBoard)
 			boards.PUT("/:id", boardHandler.UpdateBoard)
 			boards.DELETE("/:id", boardHandler.DeleteBoard)
+			boards.GET("/debug/subscription", boardHandler.DebugSubscription)
 
 			// Column routes
 			boards.GET("/:id/columns", columnHandler.GetColumns)
@@ -82,6 +83,7 @@ func SetupRoutes(db *sql.DB) *gin.Engine {
 			billing.GET("/verify", billingHandler.VerifySubscription)
 			billing.GET("/status", billingHandler.GetSubscriptionStatus)
 			billing.GET("/payments", billingHandler.GetPaymentHistory)
+			billing.GET("/debug/payments", billingHandler.DebugPaymentHistory)
 			billing.GET("/2fa-status", billingHandler.Get2FAStatus)
 			billing.GET("/2fa-url", billingHandler.Get2FAURL)
 		}

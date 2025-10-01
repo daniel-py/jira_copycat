@@ -62,6 +62,8 @@ func CreateSubscription(db *sql.DB, userID uuid.UUID, paystackRef, plan string, 
 
 func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, error) {
 	var subscription models.Subscription
+	var pending2FAReference, pending2FAURL sql.NullString
+	
 	err := db.QueryRow(`
         SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, pending_2fa_reference, pending_2fa_url, pending_2fa_created_at, created_at, updated_at
 		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'cancelled', 'pending_2fa')
@@ -69,13 +71,21 @@ func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, er
 		userID).Scan(
         &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
         &subscription.Status, &subscription.Amount, &subscription.Currency, &subscription.AuthorizationCode, &subscription.CustomerCode, &subscription.StartDate,
-        &subscription.EndDate, &subscription.NextBillingDate, &subscription.Pending2FAReference, &subscription.Pending2FAURL, &subscription.Pending2FACreatedAt, &subscription.CreatedAt, &subscription.UpdatedAt)
+        &subscription.EndDate, &subscription.NextBillingDate, &pending2FAReference, &pending2FAURL, &subscription.Pending2FACreatedAt, &subscription.CreatedAt, &subscription.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // No subscription found
 		}
 		return nil, err
+	}
+
+	// Handle NULL values for 2FA fields
+	if pending2FAReference.Valid {
+		subscription.Pending2FAReference = &pending2FAReference.String
+	}
+	if pending2FAURL.Valid {
+		subscription.Pending2FAURL = &pending2FAURL.String
 	}
 
 	return &subscription, nil
@@ -165,14 +175,45 @@ func RecordPayment(db *sql.DB, userID uuid.UUID, subscriptionID *uuid.UUID, refe
 }
 
 func GetPaymentHistory(db *sql.DB, userID uuid.UUID) ([]models.Payment, error) {
+    fmt.Printf("DEBUG: GetPaymentHistory called for userID: %s\n", userID)
+    
+    // First, let's check what columns actually exist in the payments table
     rows, err := db.Query(`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'payments' 
+        ORDER BY ordinal_position`)
+    if err != nil {
+        fmt.Printf("DEBUG: Failed to query information_schema: %v\n", err)
+        return nil, err
+    }
+    defer rows.Close()
+    
+    var columns []string
+    for rows.Next() {
+        var colName, dataType string
+        if err := rows.Scan(&colName, &dataType); err != nil {
+            fmt.Printf("DEBUG: Failed to scan column info: %v\n", err)
+            return nil, err
+        }
+        columns = append(columns, colName)
+        fmt.Printf("DEBUG: Column: %s (%s)\n", colName, dataType)
+    }
+    
+    fmt.Printf("DEBUG: Payments table has %d columns: %v\n", len(columns), columns)
+    
+    // Now try the actual query
+    rows, err = db.Query(`
         SELECT id, user_id, subscription_id, reference, amount, currency, status, paid_at, channel, created_at
         FROM payments WHERE user_id = $1 ORDER BY created_at DESC`, userID)
     if err != nil {
+        fmt.Printf("DEBUG: Query failed with error: %v\n", err)
         return nil, err
     }
     defer rows.Close()
 
+    fmt.Printf("DEBUG: Query executed successfully, scanning rows...\n")
+    
     var payments []models.Payment
     for rows.Next() {
         var p models.Payment
@@ -181,10 +222,14 @@ func GetPaymentHistory(db *sql.DB, userID uuid.UUID) ([]models.Payment, error) {
         // currency and channel can be NULL in DB, scan into NullString and map safely
         var currency sql.NullString
         var channel sql.NullString
+        
+        fmt.Printf("DEBUG: About to scan row...\n")
         err := rows.Scan(&p.ID, &p.UserID, &subID, &p.Reference, &p.Amount, &currency, &p.Status, &paidAt, &channel, &p.CreatedAt)
         if err != nil {
+            fmt.Printf("DEBUG: Scan failed with error: %v\n", err)
             return nil, err
         }
+        
         if currency.Valid {
             p.Currency = currency.String
         } else {
@@ -206,7 +251,10 @@ func GetPaymentHistory(db *sql.DB, userID uuid.UUID) ([]models.Payment, error) {
             p.PaidAt = &t
         }
         payments = append(payments, p)
+        fmt.Printf("DEBUG: Successfully scanned payment: %s\n", p.Reference)
     }
+    
+    fmt.Printf("DEBUG: GetPaymentHistory completed successfully, found %d payments\n", len(payments))
 	return payments, nil
 }
 

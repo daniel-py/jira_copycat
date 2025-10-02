@@ -68,21 +68,25 @@ func (h *BoardHandler) GetBoards(c *gin.Context) {
 		return
 	}
 
-	if !canAccess {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "Your subscription has expired. Please renew to access your boards.",
-			"subscription_expired": true,
-		})
-		return
-	}
-
+	// Get boards regardless of subscription status
 	boards, err := services.GetUserBoards(h.db, userID.(uuid.UUID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"boards": boards})
+	// Return boards with access status
+	response := gin.H{
+		"boards": boards,
+		"can_access": canAccess,
+	}
+
+	if !canAccess {
+		response["subscription_expired"] = true
+		response["message"] = "Your subscription has expired. Please renew to access your boards."
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // Debug endpoint to test subscription access

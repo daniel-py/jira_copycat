@@ -19,6 +19,12 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
     state = state.copyWith(error: null);
   }
 
+  void clearPaymentHistoryError() {
+    if (state.error != null && state.error!.contains('payment history')) {
+      state = state.copyWith(error: null);
+    }
+  }
+
   Future<PaystackResponse> initializeSubscription(SubscriptionCreate subscriptionCreate) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -53,21 +59,54 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
     }
   }
 
-  Future<void> loadPaymentHistory() async {
+  Future<void> loadPaymentHistory({int maxRetries = 3}) async {
     state = state.copyWith(isLoading: true, error: null);
-    try {
-      Logger.logInfo('Loading payment history', context: 'SUBSCRIPTION_PROVIDER');
-      final payments = await _apiService.getPaymentHistory();
-      state = state.copyWith(payments: payments, isLoading: false);
-      Logger.logInfo('Payment history loaded: ${payments.length} items', context: 'SUBSCRIPTION_PROVIDER');
-    } catch (e, stackTrace) {
-      Logger.logError(
-        'Failed to load payment history',
-        error: e,
-        stackTrace: stackTrace,
-        context: 'SUBSCRIPTION_PROVIDER',
-      );
-      state = state.copyWith(isLoading: false, error: e.toString());
+    
+    int retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        Logger.logInfo(
+          'Loading payment history (attempt ${retryCount + 1}/$maxRetries)',
+          context: 'SUBSCRIPTION_PROVIDER',
+        );
+        final payments = await _apiService.getPaymentHistory();
+        state = state.copyWith(payments: payments, isLoading: false, error: null);
+        Logger.logInfo(
+          'Payment history loaded successfully: ${payments.length} items',
+          context: 'SUBSCRIPTION_PROVIDER',
+        );
+        return; // Success, exit the retry loop
+      } catch (e, stackTrace) {
+        retryCount++;
+        
+        Logger.logError(
+          'Failed to load payment history (attempt $retryCount/$maxRetries)',
+          error: e,
+          stackTrace: stackTrace,
+          context: 'SUBSCRIPTION_PROVIDER',
+        );
+        
+        // If this is the last attempt, set the error state
+        if (retryCount >= maxRetries) {
+          String errorMessage = 'Failed to load payment history after $maxRetries attempts. ';
+          if (e.toString().contains('500')) {
+            errorMessage += 'Server error occurred. Please try again later.';
+          } else if (e.toString().contains('401')) {
+            errorMessage += 'Authentication required. Please log in again.';
+          } else {
+            errorMessage += 'Please check your connection and try again.';
+          }
+
+          state = state.copyWith(isLoading: false, error: errorMessage);
+          return;
+        }
+
+        // Wait before retrying (exponential backoff)
+        final delay = Duration(milliseconds: 1000 * retryCount);
+        Logger.logInfo('Retrying payment history load in ${delay.inMilliseconds}ms', context: 'SUBSCRIPTION_PROVIDER');
+        await Future.delayed(delay);
+      }
     }
   }
 
@@ -180,7 +219,7 @@ class SubscriptionState {
       payments: payments ?? this.payments,
       twoFAStatus: twoFAStatus ?? this.twoFAStatus,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error,
     );
   }
 }

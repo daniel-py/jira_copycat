@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../providers/board_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../utils/logger.dart';
 
@@ -143,9 +144,12 @@ class _PaymentWebViewState extends ConsumerState<PaymentWebView> {
       await ref.read(subscriptionStateProvider.notifier).verifySubscription(widget.reference);
       await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
       await ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
+      // Also reload boards to reflect new subscription status
+      await ref.read(boardStateProvider.notifier).loadBoards();
       if (mounted) Navigator.of(context).pop(true);
     } catch (e, st) {
       Logger.logError('Verification failed', error: e, stackTrace: st, context: 'WEBVIEW');
+      // Don't clear the pending reference on failure - let user retry
       if (mounted) Navigator.of(context).pop(false);
     }
   }

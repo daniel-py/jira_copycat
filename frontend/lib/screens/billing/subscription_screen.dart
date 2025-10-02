@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/subscription.dart';
+import '../../providers/board_provider.dart';
 import '../../providers/subscription_provider.dart';
 // import 'package:url_launcher/url_launcher.dart';
 import 'payment_webview.dart';
@@ -71,12 +72,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (_pendingReference != null && subscriptionState.currentSubscription == null)
+                  if (_pendingReference != null &&
+                      (subscriptionState.currentSubscription == null ||
+                          subscriptionState.currentSubscription?.status == 'cancelled'))
                         _buildPendingVerificationCard(context),
                       // Current subscription status
-                      if (subscriptionState.currentSubscription != null)
+                  if (subscriptionState.currentSubscription != null &&
+                      !(_pendingReference != null && subscriptionState.currentSubscription?.status == 'cancelled'))
                         _buildCurrentSubscriptionCard(context, subscriptionState.currentSubscription!)
-                      else
+                  else if (subscriptionState.currentSubscription == null)
                         _buildFreeTierCard(context),
                       
                       const SizedBox(height: 24),
@@ -92,18 +96,75 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       
                       ...subscriptionState.plans.map((plan) => _buildPlanCard(context, plan, subscriptionState)),
                   const SizedBox(height: 24),
-                  Text(
-                    'Payment History',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                      Text(
+                        'Payment History',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      if (subscriptionState.error != null && subscriptionState.error!.contains('payment history'))
+                        IconButton(
+                          onPressed: () {
+                            ref.read(subscriptionStateProvider.notifier).clearPaymentHistoryError();
+                            ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Retry loading payment history',
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
-                  if (subscriptionState.payments.isEmpty)
+                  
+                  // Show loading state
+                  if (subscriptionState.isLoading && subscriptionState.payments.isEmpty)
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    )
+                  // Show error state
+                  else if (subscriptionState.error != null && subscriptionState.error!.contains('payment history'))
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.error, color: Colors.red),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    subscriptionState.error!,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                ref.read(subscriptionStateProvider.notifier).clearPaymentHistoryError();
+                                ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  // Show empty state
+                  else if (subscriptionState.payments.isEmpty)
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Text('No payments yet', style: Theme.of(context).textTheme.bodyMedium),
                       ),
                     )
+                  // Show payments
                   else
                     ...subscriptionState.payments.map(
                       (p) => Card(
@@ -122,6 +183,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   ),
                 ),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload pending reference when screen becomes visible again
+    _loadPendingReference();
   }
 
   @override
@@ -341,6 +409,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   try {
                     await ref.read(subscriptionStateProvider.notifier).verifySubscription(_pendingReference!);
                     await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+                    await ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
+                    // Also reload boards to reflect new subscription status
+                    await ref.read(boardStateProvider.notifier).loadBoards();
                     await prefs.remove('pending_paystack_reference');
                     if (mounted) setState(() { _pendingReference = null; });
                     if (mounted) {
@@ -366,11 +437,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Widget _buildPlanCard(BuildContext context, SubscriptionPlan plan, SubscriptionState subscriptionState) {
-    // Check if user has an active subscription or pending payment
-    final hasActiveSubscription =
-        subscriptionState.currentSubscription?.status == 'active' || _pendingReference != null;
-    final hasCancelledSubscription = subscriptionState.currentSubscription?.status == 'cancelled';
-    final hasPending2FA = subscriptionState.currentSubscription?.status == 'pending_2fa';
+    // Check subscription status with priority: active > pending_2fa > cancelled
+    final currentSubscription = subscriptionState.currentSubscription;
+    final hasActiveSubscription = currentSubscription?.status == 'active';
+    final hasPending2FA = currentSubscription?.status == 'pending_2fa';
+    final hasCancelledSubscription = currentSubscription?.status == 'cancelled';
+    final hasPendingPayment = _pendingReference != null && currentSubscription == null;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -430,7 +502,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (hasActiveSubscription || hasPending2FA) ? null : () => _subscribeToPlan(context, plan),
+                  onPressed: (hasActiveSubscription || hasPending2FA || hasPendingPayment)
+                      ? null
+                      : () => _subscribeToPlan(context, plan),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -439,6 +513,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                         ? 'Already Subscribed'
                         : hasPending2FA
                         ? 'Complete 2FA First'
+                        : hasPendingPayment
+                        ? 'Payment Pending'
                         : 'Subscribe',
                   ),
                 ),
@@ -447,7 +523,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'You already have an active or pending subscription',
+                    'You already have an active subscription',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -460,6 +536,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   child: Text(
                     'Please complete 2FA authentication to renew your subscription first.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orange.shade700),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              if (hasPendingPayment)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'You have a pending payment. Please complete verification.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade700),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -546,12 +631,24 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         if (result == true && mounted) {
           // Refresh status after successful verification
           await ref.read(subscriptionStateProvider.notifier).loadSubscriptionStatus();
+          await ref.read(subscriptionStateProvider.notifier).loadPaymentHistory();
+          // Also reload boards to reflect new subscription status
+          await ref.read(boardStateProvider.notifier).loadBoards();
           await prefs.remove('pending_paystack_reference');
           setState(() { _pendingReference = null; });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Subscription activated successfully.'),
               backgroundColor: Colors.green,
+            ),
+          );
+        } else if (result == false && mounted) {
+          // Verification failed, reload pending reference to show retry option
+          await _loadPendingReference();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment verification failed. Please try again.'),
+              backgroundColor: Colors.orange,
             ),
           );
         }

@@ -64,9 +64,10 @@ func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, er
 	var subscription models.Subscription
 	var pending2FAReference, pending2FAURL sql.NullString
 	
+	// First, try to get an active or pending_2fa subscription
 	err := db.QueryRow(`
         SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, pending_2fa_reference, pending_2fa_url, pending_2fa_created_at, created_at, updated_at
-		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'cancelled', 'pending_2fa')
+		FROM subscriptions WHERE user_id = $1 AND status IN ('active', 'pending_2fa')
 		ORDER BY created_at DESC LIMIT 1`,
 		userID).Scan(
         &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
@@ -75,9 +76,25 @@ func GetUserSubscription(db *sql.DB, userID uuid.UUID) (*models.Subscription, er
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // No subscription found
+			// If no active/pending subscription, check for cancelled subscription
+			err = db.QueryRow(`
+                SELECT id, user_id, paystack_reference, plan, status, amount, currency, authorization_code, customer_code, start_date, end_date, next_billing_date, pending_2fa_reference, pending_2fa_url, pending_2fa_created_at, created_at, updated_at
+                FROM subscriptions WHERE user_id = $1 AND status = 'cancelled'
+                ORDER BY created_at DESC LIMIT 1`,
+                userID).Scan(
+                &subscription.ID, &subscription.UserID, &subscription.PaystackReference, &subscription.Plan,
+                &subscription.Status, &subscription.Amount, &subscription.Currency, &subscription.AuthorizationCode, &subscription.CustomerCode, &subscription.StartDate,
+                &subscription.EndDate, &subscription.NextBillingDate, &pending2FAReference, &pending2FAURL, &subscription.Pending2FACreatedAt, &subscription.CreatedAt, &subscription.UpdatedAt)
+            
+            if err != nil {
+                if err == sql.ErrNoRows {
+                    return nil, nil // No subscription found
+                }
+                return nil, err
+            }
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
 	// Handle NULL values for 2FA fields

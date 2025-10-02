@@ -224,6 +224,45 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getBoardsWithAccessStatus() async {
+    try {
+      await _loadToken();
+      Logger.logInfo('Fetching boards with access status', context: 'API_BOARD');
+      final response = await _dio.get('/boards');
+      final boardsData = response.data['boards'];
+      final canAccess = response.data['can_access'] ?? true;
+      final subscriptionExpired = response.data['subscription_expired'] ?? false;
+      final message = response.data['message'];
+
+      if (boardsData == null) {
+        Logger.logWarning('No boards data in response, returning empty list', context: 'API_BOARD');
+        return {
+          'boards': <Board>[],
+          'canAccess': canAccess,
+          'subscriptionExpired': subscriptionExpired,
+          'message': message,
+        };
+      }
+
+      final boards = (boardsData as List).map((json) => Board.fromJson(json)).toList();
+
+      Logger.logInfo(
+        'Boards fetched successfully: ${boards.length} boards, canAccess: $canAccess',
+        context: 'API_BOARD',
+      );
+
+      return {'boards': boards, 'canAccess': canAccess, 'subscriptionExpired': subscriptionExpired, 'message': message};
+    } catch (e, stackTrace) {
+      Logger.logError(
+        'Failed to fetch boards with access status',
+        error: e,
+        stackTrace: stackTrace,
+        context: 'API_BOARD',
+      );
+      rethrow;
+    }
+  }
+
   // Card methods
   Future<List<BoardCard>> getCards(String columnId) async {
     try {

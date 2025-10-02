@@ -146,13 +146,25 @@ class BoardNotifier extends StateNotifier<BoardState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       Logger.logInfo('Loading boards', context: 'BOARD_PROVIDER');
-      final boards = await _apiService.getBoards();
+      final response = await _apiService.getBoardsWithAccessStatus();
+      final boards = response['boards'] as List<Board>;
+      final subscriptionExpired = response['subscriptionExpired'] as bool;
+      
       state = state.copyWith(
         boards: boards,
         isLoading: false,
         error: null,
+        isSubscriptionExpired: subscriptionExpired,
       );
-      Logger.logInfo('Boards loaded successfully: ${boards.length} boards found', context: 'BOARD_PROVIDER');
+      
+      if (subscriptionExpired) {
+        Logger.logInfo(
+          'Boards loaded but subscription expired: ${boards.length} boards found (locked)',
+          context: 'BOARD_PROVIDER',
+        );
+      } else {
+        Logger.logInfo('Boards loaded successfully: ${boards.length} boards found', context: 'BOARD_PROVIDER');
+      }
     } catch (e, stackTrace) {
       Logger.logError('Failed to load boards', 
         error: e, 
@@ -164,9 +176,6 @@ class BoardNotifier extends StateNotifier<BoardState> {
       if (e.toString().contains('401')) {
         errorMessage = 'Authentication required. Please log in again.';
         Logger.logWarning('Authentication error detected in loadBoards', context: 'BOARD_PROVIDER');
-      } else if (e.toString().contains('subscription has expired') || e.toString().contains('subscription_expired')) {
-        errorMessage = 'Your subscription has expired. Please renew to access your boards.';
-        Logger.logWarning('Subscription expired error detected in loadBoards', context: 'BOARD_PROVIDER');
       }
       
       state = state.copyWith(
@@ -320,6 +329,7 @@ class BoardState {
   final Map<String, List<BoardCard>> cardsByColumn;
   final bool isLoading;
   final String? error;
+  final bool isSubscriptionExpired;
 
   BoardState({
     this.boards = const [],
@@ -328,6 +338,7 @@ class BoardState {
     this.cardsByColumn = const {},
     this.isLoading = false,
     this.error,
+    this.isSubscriptionExpired = false,
   });
 
   BoardState copyWith({
@@ -337,6 +348,7 @@ class BoardState {
     Map<String, List<BoardCard>>? cardsByColumn,
     bool? isLoading,
     String? error,
+    bool? isSubscriptionExpired,
   }) {
     return BoardState(
       boards: boards ?? this.boards,
@@ -345,6 +357,7 @@ class BoardState {
       cardsByColumn: cardsByColumn ?? this.cardsByColumn,
       isLoading: isLoading ?? this.isLoading,
       error: error, // This will properly set error to null when passed
+      isSubscriptionExpired: isSubscriptionExpired ?? this.isSubscriptionExpired,
     );
   }
 }

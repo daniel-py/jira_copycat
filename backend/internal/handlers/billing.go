@@ -214,14 +214,34 @@ func (h *BillingHandler) Webhook(c *gin.Context) {
         var userID uuid.UUID
         err := h.db.QueryRow("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", email).Scan(&userID)
         if err == nil {
-            // Find active subscription for user
+            // Find current subscription for user
             sub, _ := services.GetUserSubscription(h.db, userID)
             var subID *uuid.UUID
-            if sub != nil {
+            
+            if sub != nil && sub.Status == "active" {
+                // Update existing active subscription
                 subID = &sub.ID
-                // Update subscription with latest auth/customer code and set next billing
                 _, _ = h.db.Exec(`UPDATE subscriptions SET authorization_code=$1, customer_code=$2, paystack_reference=$3, next_billing_date=GREATEST(next_billing_date, NOW()) + INTERVAL '1 month', updated_at=$4 WHERE id=$5`,
                     authCode, customerCode, reference, time.Now(), sub.ID)
+            } else {
+                // Create new subscription if none exists or current one is cancelled
+                // Determine plan based on amount
+                var plan string
+                switch amount {
+                case 500000:
+                    plan = "basic"
+                case 1500000:
+                    plan = "pro"
+                case 5000000:
+                    plan = "enterprise"
+                default:
+                    plan = "basic" // Default to basic for unknown amounts
+                }
+                
+                newSub, err := services.CreateSubscription(h.db, userID, reference, plan, amount, authCode, customerCode)
+                if err == nil {
+                    subID = &newSub.ID
+                }
             }
 
             // Record payment

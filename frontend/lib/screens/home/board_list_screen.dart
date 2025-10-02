@@ -9,16 +9,15 @@ import 'board_detail_screen.dart';
 
 class BoardCard extends StatelessWidget {
   final models.Board board;
-  final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final bool isLocked;
 
   const BoardCard({
     super.key,
     required this.board,
-    required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
+    this.onTap, this.onEdit, this.onDelete, this.isLocked = false,
   });
 
   @override
@@ -26,89 +25,135 @@ class BoardCard extends StatelessWidget {
     return Card(
       elevation: 2,
       child: InkWell(
-        onTap: onTap,
+        onTap: isLocked ? null : onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: Color(int.parse(board.color.replaceFirst('#', '0xFF'))).withOpacity(0.1),
+            color: isLocked
+                ? Color(int.parse(board.color.replaceFirst('#', '0xFF'))).withOpacity(0.05)
+                : Color(int.parse(board.color.replaceFirst('#', '0xFF'))).withOpacity(0.1),
+            border: isLocked
+                ? Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.3), width: 1)
+                : null,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Color(int.parse(board.color.replaceFirst('#', '0xFF'))),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const Spacer(),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') onEdit();
-                        if (value == 'delete') onDelete();
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 20),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
+                    Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: isLocked
+                                ? Color(int.parse(board.color.replaceFirst('#', '0xFF'))).withOpacity(0.5)
+                                : Color(int.parse(board.color.replaceFirst('#', '0xFF'))),
+                            shape: BoxShape.circle,
                           ),
                         ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 20),
-                              SizedBox(width: 8),
-                              Text('Delete'),
+                        const Spacer(),
+                        if (!isLocked)
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'edit' && onEdit != null) onEdit!();
+                              if (value == 'delete' && onDelete != null) onDelete!();
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(children: [Icon(Icons.edit, size: 20), SizedBox(width: 8), Text('Edit')]),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [Icon(Icons.delete, size: 20), SizedBox(width: 8), Text('Delete')],
+                                ),
+                              ),
                             ],
                           ),
-                        ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      board.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isLocked ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6) : null,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (board.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        board.description,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isLocked
+                              ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
+                              : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      'Created ${_formatDate(board.createdAt)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: isLocked
+                            ? Theme.of(context).colorScheme.onSurface.withOpacity(0.3)
+                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  board.name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (board.description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    board.description,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+
+              // Lock overlay
+              if (isLocked)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Text(
-                  'Created ${_formatDate(board.createdAt)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 32,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Locked',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Renew subscription\nto access',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
@@ -271,30 +316,94 @@ class BoardListScreen extends ConsumerWidget {
                 ),
               ),
             )
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.9,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: boardState.boards.length,
-                      itemBuilder: (context, index) {
-                        final board = boardState.boards[index];
-                        return BoardCard(
-                          board: board,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => BoardDetailScreen(boardId: board.id),
+          : Column(
+              children: [
+                // Show subscription expired banner if applicable
+                if (boardState.isSubscriptionExpired)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.lock_outline, color: Theme.of(context).colorScheme.error, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Your subscription has expired',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onErrorContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            );
-                          },
-                          onEdit: () => _showEditBoardDialog(context, ref, board),
-                          onDelete: () => _showDeleteBoardDialog(context, ref, board),
-                        );
-                      },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'You can see your boards but cannot access them until you renew your subscription.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onErrorContainer.withOpacity(0.8),
+                          ),
+                        ),
+                        // const SizedBox(height: 12),
+                        // ElevatedButton.icon(
+                        //   onPressed: () {
+                        //     // Navigate to subscription screen
+                        //     DefaultTabController.of(context).animateTo(1);
+                        //   },
+                        //   icon: const Icon(Icons.upgrade),
+                        //   label: const Text('Renew Subscription'),
+                        //   style: ElevatedButton.styleFrom(
+                        //     backgroundColor: Theme.of(context).colorScheme.error,
+                        //     foregroundColor: Theme.of(context).colorScheme.onError,
+                        //   ),
+                        // ),
+                      ],
+                    ),
+                  ),
+
+                // Show boards grid
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.9,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: boardState.boards.length,
+                    itemBuilder: (context, index) {
+                      final board = boardState.boards[index];
+                      return BoardCard(
+                        board: board,
+                        onTap: boardState.isSubscriptionExpired
+                            ? null // Disable tap when subscription expired
+                            : () {
+                                Navigator.of(
+                                  context,
+                                ).push(MaterialPageRoute(builder: (context) => BoardDetailScreen(boardId: board.id)));
+                              },
+                        onEdit: boardState.isSubscriptionExpired
+                            ? null // Disable edit when subscription expired
+                            : () => _showEditBoardDialog(context, ref, board),
+                        onDelete: boardState.isSubscriptionExpired
+                            ? null // Disable delete when subscription expired
+                            : () => _showDeleteBoardDialog(context, ref, board),
+                        isLocked: boardState.isSubscriptionExpired,
+                      );
+                    },
+                  ),
+                ),
+              ],
                     ),
     );
   }
